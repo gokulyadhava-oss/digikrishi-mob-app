@@ -28,6 +28,7 @@ export const Colors = {
     mutedForeground: '#737373',
     card: '#f0fdf4',
     cardBorder: '#bbf7d0',
+    emeraldBorder: '#059669',
     primary: '#15803d',
     primaryForeground: '#fafafa',
     destructive: '#dc2626',
@@ -43,7 +44,9 @@ export const Colors = {
     muted: '#3f3f46',
     mutedForeground: '#a1a1aa',
     card: '#14532d',
+    /** Emerald border for cards – same intent in light/dark */
     cardBorder: '#166534',
+    emeraldBorder: '#10b981',
     primary: '#22c55e',
     primaryForeground: '#fafafa',
     destructive: '#ef4444',

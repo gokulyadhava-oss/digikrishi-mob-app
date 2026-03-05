@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digi Krishi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Syne:wght@300;400;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --green-deep:   #0D3320;
+    --green-mid:    #1A6640;
+    --green-leaf:   #3DB86A;
+    --green-bright: #5EE890;
+    --green-glow:   #7FFFA8;
+    --soil-dark:    #060E08;
+    --blue-circuit: #1A8CFF;
+    --blue-glow:    #60C0FF;
+    --white:        #F0FFF5;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--soil-dark);
+    font-family: 'Syne', sans-serif;
+    color: var(--white);
+  }
+
+  /* ── Particle canvas ── */
+  #bg-canvas {
+    position: fixed; inset: 0; z-index: 0;
+  }
+
+  /* ── Radial background glow ── */
+  .bg-glow {
+    position: fixed; inset: 0; z-index: 1;
+    background:
+      radial-gradient(ellipse 70% 50% at 50% 55%, rgba(13,51,32,0.85) 0%, transparent 70%),
+      radial-gradient(ellipse 100% 100% at 50% 50%, rgba(6,14,8,0.5) 0%, rgba(2,5,3,1) 100%);
+  }
+
+  /* ── HUD corners ── */
+  .hud-corner {
+    position: fixed; width: 28px; height: 28px;
+    z-index: 50; opacity: 0;
+    animation: hudIn 0.5s 0.4s ease forwards;
+  }
+  .hud-corner::before, .hud-corner::after {
+    content: ''; position: absolute; background: var(--green-leaf); opacity: 0.5;
+  }
+  .hud-corner.tl { top: 22px; left: 22px; }
+  .hud-corner.tr { top: 22px; right: 22px; }
+  .hud-corner.bl { bottom: 22px; left: 22px; }
+  .hud-corner.br { bottom: 22px; right: 22px; }
+  .hud-corner.tl::before, .hud-corner.tr::before { top:0; width:100%; height:1.5px; }
+  .hud-corner.bl::before, .hud-corner.br::before { bottom:0; width:100%; height:1.5px; }
+  .hud-corner.tl::after,  .hud-corner.bl::after  { left:0; width:1.5px; height:100%; }
+  .hud-corner.tr::after,  .hud-corner.br::after  { right:0; width:1.5px; height:100%; }
+  @keyframes hudIn { to { opacity: 1; } }
+
+  /* ── Scan line ── */
+  .scan-line {
+    position: fixed; left: 0; right: 0; height: 1px; z-index: 60;
+    background: linear-gradient(90deg, transparent, rgba(94,232,144,0.5) 40%, rgba(94,232,144,0.8) 50%, rgba(94,232,144,0.5) 60%, transparent);
+    top: -2px; opacity: 0;
+    animation: scanDown 2s 0.2s cubic-bezier(0.4,0,0.6,1) forwards;
+  }
+  @keyframes scanDown {
+    0%   { top: -2px; opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  /* ── Flash ── */
+  .flash {
+    position: fixed; inset: 0;
+    background: rgba(61,184,106,0.12); z-index: 200;
+    animation: flashOut 0.7s 0s ease forwards; pointer-events: none;
+  }
+  @keyframes flashOut { to { opacity: 0; } }
+
+  /* ── Centre stage ── */
+  .stage {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 10;
+  }
+
+  /* ── Logo wrapper ── */
+  .logo-wrap {
+    position: relative;
+    width: 200px; height: 200px;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0;
+    animation: logoIn 0.9s 0.8s cubic-bezier(0.34,1.4,0.64,1) forwards;
+  }
+  @keyframes logoIn {
+    0%   { opacity: 0; transform: scale(0.6); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  .logo-img {
+    width: 180px; height: 180px;
+    object-fit: contain;
+    position: relative; z-index: 4;
+    animation: logoBreathe 3.5s 2s ease-in-out infinite alternate;
+    filter: drop-shadow(0 0 16px rgba(61,184,106,0.4));
+  }
+  @keyframes logoBreathe {
+    0%   { filter: drop-shadow(0 0 12px rgba(61,184,106,0.35)); }
+    100% { filter: drop-shadow(0 0 30px rgba(94,232,144,0.65)); }
+  }
+
+  /* ── Spinning ring 1 — outer dashed ── */
+  .ring {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .ring-1 {
+    border: 1px dashed rgba(61,184,106,0.25);
+    animation: spin1 18s linear infinite;
+    top: -14px; left: -14px; right: -14px; bottom: -14px;
+    width: calc(100% + 28px); height: calc(100% + 28px);
+    opacity: 0;
+    transition: opacity 0.5s;
+    animation: spin1 18s 1.5s linear infinite, ringFadeIn 0.8s 1.5s ease forwards;
+  }
+  @keyframes spin1 { to { transform: rotate(360deg); } }
+  @keyframes ringFadeIn { to { opacity: 1; } }
+
+  /* ── Spinning ring 2 — inner solid thin ── */
+  .ring-2 {
+    border: 1px solid rgba(94,232,144,0.12);
+    top: -24px; left: -24px;
+    width: calc(100% + 48px); height: calc(100% + 48px);
+    opacity: 0;
+    animation: spin2 28s 1.7s linear infinite reverse, ringFadeIn 0.8s 1.7s ease forwards;
+  }
+  @keyframes spin2 { to { transform: rotate(360deg); } }
+
+  /* ── Orbit dots on ring-1 ── */
+  .orbit-wrap {
+    position: absolute;
+    width: calc(100% + 28px); height: calc(100% + 28px);
+    top: -14px; left: -14px;
+    border-radius: 50%;
+    animation: spin1 18s 1.5s linear infinite;
+    opacity: 0;
+    animation: spin1 18s 1.5s linear infinite, ringFadeIn 0.6s 2s ease forwards;
+  }
+
+  .orbit-dot {
+    position: absolute;
+    width: 5px; height: 5px;
+    background: var(--green-bright);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--green-bright), 0 0 2px #fff;
+  }
+  /* Position dots around the circle (top, right, bottom, left) */
+  .od-top    { top: -2.5px; left: calc(50% - 2.5px); }
+  .od-right  { right: -2.5px; top: calc(50% - 2.5px); }
+  .od-bottom { bottom: -2.5px; left: calc(50% - 2.5px); }
+  .od-left   { left: -2.5px; top: calc(50% - 2.5px); }
+
+  /* ── Arc segments (SVG rings) ── */
+  .svg-rings {
+    position: absolute;
+    top: -40px; left: -40px;
+    width: calc(100% + 80px); height: calc(100% + 80px);
+    pointer-events: none; z-index: 2;
+    opacity: 0;
+    animation: ringFadeIn 1s 1.8s ease forwards;
+  }
+
+  .arc-dash {
+    fill: none;
+    stroke-linecap: round;
+    animation: arcSpin 12s linear infinite;
+    transform-origin: center;
+  }
+  .arc-1 {
+    stroke: rgba(26,140,255,0.4);
+    stroke-width: 1.2;
+    stroke-dasharray: 40 60;
+    animation-duration: 9s;
+    animation-direction: reverse;
+  }
+  .arc-2 {
+    stroke: rgba(61,184,106,0.3);
+    stroke-width: 0.8;
+    stroke-dasharray: 20 90;
+    animation-duration: 14s;
+  }
+  .arc-3 {
+    stroke: rgba(127,255,168,0.2);
+    stroke-width: 1;
+    stroke-dasharray: 60 40;
+    animation-duration: 20s;
+    animation-direction: reverse;
+  }
+  @keyframes arcSpin { to { transform: rotate(360deg); } }
+
+  /* ── Pulse ripple ── */
+  .ripple {
+    position: absolute;
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    border: 1px solid rgba(61,184,106,0.5);
+    animation: rippleOut 3s 2s ease-out infinite;
+    pointer-events: none; z-index: 1;
+  }
+  .ripple:nth-child(2) { animation-delay: 3s; }
+  .ripple:nth-child(3) { animation-delay: 4s; }
+  @keyframes rippleOut {
+    0%   { transform: scale(0.9); opacity: 0.6; border-color: rgba(61,184,106,0.5); }
+    100% { transform: scale(2.2); opacity: 0;   border-color: rgba(61,184,106,0); }
+  }
+
+  /* ── Title ── */
+  .title-block {
+    margin-top: 36px;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px;
+  }
+
+  .brand-tag {
+    font-family: 'Syncopate', sans-serif;
+    font-size: 8.5px; letter-spacing: 0.45em;
+    color: rgba(94,232,144,0.55);
+    text-transform: uppercase;
+    opacity: 0;
+    animation: slideUp 0.7s 1.8s ease forwards;
+  }
+
+  .brand-name {
+    font-family: 'Syncopate', sans-serif;
+    font-size: clamp(30px, 7vw, 46px);
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #ffffff 0%, #b8ffd4 40%, #5EE890 70%, #3DB86A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    clip-path: inset(0 100% 0 0);
+    animation: revealText 1s 2s cubic-bezier(0.77,0,0.18,1) forwards;
+    filter: drop-shadow(0 0 18px rgba(94,232,144,0.25));
+  }
+  @keyframes revealText {
+    to { clip-path: inset(0 0% 0 0); }
+  }
+
+  .brand-divider {
+    width: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(61,184,106,0.6), transparent);
+    animation: divExpand 0.9s 2.9s ease forwards;
+  }
+  @keyframes divExpand { to { width: 160px; } }
+
+  .brand-sub {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px; font-weight: 300;
+    letter-spacing: 0.32em;
+    color: rgba(224,255,236,0.38);
+    text-transform: uppercase;
+    opacity: 0;
+    animation: slideUp 0.7s 3.1s ease forwards;
+  }
+  @keyframes slideUp {
+    0%   { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Side data readouts ── */
+  .data-col {
+    position: fixed; z-index: 30;
+    font-family: 'Syne', sans-serif;
+    font-size: 8.5px; letter-spacing: 0.18em;
+    opacity: 0;
+    animation: slideUp 0.6s 3.5s ease forwards;
+  }
+  .data-col.left  { left: 28px; top: 50%; transform: translateY(-50%); text-align: left; }
+  .data-col.right { right: 28px; top: 50%; transform: translateY(-50%); text-align: right; }
+
+  .data-row-item { display: flex; flex-direction: column; margin-bottom: 18px; }
+  .data-col.right .data-row-item { align-items: flex-end; }
+
+  .d-label { color: rgba(94,232,144,0.35); margin-bottom: 2px; }
+  .d-val   { color: rgba(127,255,168,0.75); font-size: 14px; font-weight: 700; letter-spacing: 0.05em; }
+  .d-unit  { color: rgba(94,232,144,0.4); font-size: 7px; letter-spacing: 0.2em; display: block; margin-top: 1px; }
+
+  .data-col-line {
+    position: fixed; z-index: 29;
+    width: 1px; top: 30%; bottom: 30%;
+    background: linear-gradient(180deg, transparent, rgba(61,184,106,0.15) 30%, rgba(61,184,106,0.15) 70%, transparent);
+    opacity: 0;
+    animation: hudIn 0.5s 3.4s ease forwards;
+  }
+  .data-col-line.left  { left: 90px; }
+  .data-col-line.right { right: 90px; }
+
+  /* ── Loader ── */
+  .loader-wrap {
+    position: fixed; bottom: 22px;
+    left: 50%; transform: translateX(-50%);
+    z-index: 40; display: flex; flex-direction: column; align-items: center; gap: 7px;
+    opacity: 0; animation: slideUp 0.5s 3.8s ease forwards;
+  }
+  .loader-track {
+    width: 100px; height: 1px;
+    background: rgba(61,184,106,0.12); border-radius: 1px; overflow: hidden;
+  }
+  .loader-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--green-mid), var(--green-bright));
+    box-shadow: 0 0 6px var(--green-bright);
+    animation: loaderFill 2s 4s ease forwards;
+  }
+  @keyframes loaderFill { to { width: 100%; } }
+  .loader-label {
+    font-family: 'Syncopate', sans-serif;
+    font-size: 6.5px; letter-spacing: 0.35em;
+    color: rgba(94,232,144,0.35); text-transform: uppercase;
+  }
+  .loader-pct {
+    font-family: 'Syne', sans-serif; font-size: 8px; font-weight: 700;
+    color: rgba(127,255,168,0.5); letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+
+<div class="flash"></div>
+<div class="scan-line"></div>
+
+<div class="hud-corner tl"></div>
+<div class="hud-corner tr"></div>
+<div class="hud-corner bl"></div>
+<div class="hud-corner br"></div>
+
+<canvas id="bg-canvas"></canvas>
+<div class="bg-glow"></div>
+
+<!-- Side data lines -->
+<div class="data-col-line left"></div>
+<div class="data-col-line right"></div>
+
+<!-- Left data -->
+<div class="data-col left">
+  <div class="data-row-item">
+    <span class="d-label">SOIL pH</span>
+    <span class="d-val" id="v1">—</span>
+    <span class="d-unit">UNITS</span>
+  </div>
+  <div class="data-row-item">
+    <span class="d-label">MOISTURE</span>
+    <span class="d-val" id="v2">—</span>
+    <span class="d-unit">PERCENT</span>
+  </div>
+  <div class="data-row-item">
+    <span class="d-label">NITROGEN</span>
+    <span class="d-val" id="v3">—</span>
+    <span class="d-unit">KG/HA</span>
+  </div>
+</div>
+
+<!-- Right data -->
+<div class="data-col right">
+  <div class="data-row-item">
+    <span class="d-label">TEMPERATURE</span>
+    <span class="d-val" id="v4">—</span>
+    <span class="d-unit">CELSIUS</span>
+  </div>
+  <div class="data-row-item">
+    <span class="d-label">HUMIDITY</span>
+    <span class="d-val" id="v5">—</span>
+    <span class="d-unit">PERCENT</span>
+  </div>
+  <div class="data-row-item">
+    <span class="d-label">YIELD INDEX</span>
+    <span class="d-val" id="v6">—</span>
+    <span class="d-unit">SCORE</span>
+  </div>
+</div>
+
+<!-- Main stage -->
+<div class="stage">
+
+  <div class="logo-wrap">
+
+    <!-- Ripple rings -->
+    <div class="ripple"></div>
+    <div class="ripple"></div>
+    <div class="ripple"></div>
+
+    <!-- SVG arc rings around logo -->
+    <svg class="svg-rings" viewBox="0 0 280 280" overflow="visible">
+      <circle class="arc-dash arc-1" cx="140" cy="140" r="110"/>
+      <circle class="arc-dash arc-2" cx="140" cy="140" r="124"/>
+      <circle class="arc-dash arc-3" cx="140" cy="140" r="97"/>
+    </svg>
+
+    <!-- Spinning ring 1 -->
+    <div class="ring ring-1"></div>
+    <!-- Spinning ring 2 -->
+    <div class="ring ring-2"></div>
+
+    <!-- Orbit dots -->
+    <div class="orbit-wrap">
+      <div class="orbit-dot od-top"></div>
+      <div class="orbit-dot od-right"></div>
+      <div class="orbit-dot od-bottom"></div>
+      <div class="orbit-dot od-left"></div>
+    </div>
+
+    <!-- THE ACTUAL LOGO — untouched -->
+    <img class="logo-img" src="digikrishi-mob-app/assets/images/logo-without-bg.png" alt="Digi Krishi Logo"/>
+
+  </div>
+
+  <!-- Title below -->
+  <div class="title-block">
+    <div class="brand-tag">AgriTech Platform</div>
+    <div class="brand-name">Digi Krishi</div>
+    <div class="brand-divider"></div>
+    <div class="brand-sub">Grow Smarter · Grow Digital</div>
+  </div>
+
+</div>
+
+<!-- Loader -->
+<div class="loader-wrap">
+  <div style="display:flex;justify-content:space-between;width:100px">
+    <div class="loader-label">Loading</div>
+    <div class="loader-pct" id="pct">0%</div>
+  </div>
+  <div class="loader-track"><div class="loader-fill" id="lf"></div></div>
+</div>
+
+<script>
+// ── Particles ──────────────────────────────────────────────────
+const canvas = document.getElementById('bg-canvas');
+const ctx    = canvas.getContext('2d');
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize(); window.addEventListener('resize', resize);
+
+const P = [];
+for (let i = 0; i < 60; i++) {
+  const blue = i < 14;
+  P.push({
+    x: Math.random() * window.innerWidth,
+    y: Math.random() * window.innerHeight,
+    vx: (Math.random() - 0.5) * 0.18,
+    vy: -Math.random() * 0.35 - 0.05,
+    r:  Math.random() * (blue ? 2 : 2.8) + 0.5,
+    maxA: Math.random() * 0.55 + 0.1,
+    tw: Math.random() * 0.004 + 0.002,
+    to: Math.random() * Math.PI * 2,
+    col: blue ? 'rgba(26,140,255,' : (Math.random() < 0.5 ? 'rgba(94,232,144,' : 'rgba(127,255,168,'),
+    born: Date.now() + Math.random() * 4000,
+  });
+}
+
+function tick(ts) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const now = Date.now();
+
+  // Faint grid
+  ctx.strokeStyle = 'rgba(61,184,106,0.025)';
+  ctx.lineWidth   = 0.5;
+  for (let x = 0; x < canvas.width; x += 55) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+  for (let y = 0; y < canvas.height; y += 55) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
+
+  P.forEach(p => {
+    if (now < p.born) return;
+    const alpha = p.maxA * (0.5 + 0.5 * Math.sin(ts * p.tw + p.to));
+    p.x += p.vx; p.y += p.vy;
+    if (p.y < -5)              { p.y = canvas.height + 5; p.x = Math.random() * canvas.width; }
+    if (p.x < -5)              { p.x = canvas.width + 5; }
+    if (p.x > canvas.width+5)  { p.x = -5; }
+
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 3.5);
+    g.addColorStop(0, p.col + alpha + ')');
+    g.addColorStop(1, p.col + '0)');
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = g; ctx.fill();
+
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = p.col + Math.min(alpha * 1.8, 1) + ')'; ctx.fill();
+  });
+
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// ── Counting data values ──────────────────────────────────────
+const targets = [
+  { id:'v1', from:5.0, to:6.8,  dec:1, suffix:'' },
+  { id:'v2', from:0,   to:72,   dec:0, suffix:'%' },
+  { id:'v3', from:0,   to:124,  dec:0, suffix:'' },
+  { id:'v4', from:18,  to:28,   dec:0, suffix:'°' },
+  { id:'v5', from:0,   to:65,   dec:0, suffix:'%' },
+  { id:'v6', from:0,   to:0.94, dec:2, suffix:'' },
+];
+setTimeout(() => {
+  targets.forEach(t => {
+    const el = document.getElementById(t.id);
+    const dur = 1400;
+    const s   = performance.now();
+    function go(now) {
+      const p    = Math.min((now - s) / dur, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      el.textContent = (t.from + (t.to - t.from) * ease).toFixed(t.dec) + t.suffix;
+      if (p < 1) requestAnimationFrame(go);
+    }
+    requestAnimationFrame(go);
+  });
+}, 3600);
+
+// ── Loader percentage ──────────────────────────────────────────
+const pctEl = document.getElementById('pct');
+setTimeout(() => {
+  const s = performance.now();
+  const dur = 2000;
+  function go(now) {
+    const p = Math.min((now - s) / dur, 1);
+    pctEl.textContent = Math.round(p * 100) + '%';
+    if (p < 1) requestAnimationFrame(go);
+  }
+  requestAnimationFrame(go);
+}, 4000);
+</script>
+</body>
+</html>

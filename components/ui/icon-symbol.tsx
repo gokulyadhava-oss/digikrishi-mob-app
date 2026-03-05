@@ -30,6 +30,7 @@ const MAPPING = {
   'eye.fill': 'visibility',
   'arrow.triangle.2.circlepath': 'sync',
   'trash.fill': 'delete',
+  'magnifyingglass': 'search',
 } as IconMapping;
 
 /**

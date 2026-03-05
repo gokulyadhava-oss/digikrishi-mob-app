@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { Text, Button } from 'react-native-paper';
 import { DatePickerModal } from 'react-native-paper-dates';
@@ -22,6 +23,11 @@ import {
   PLOT_IRRIGATION_METHOD,
   PLOT_VARIETY,
 } from '@/lib/api';
+import {
+  fetchPlacePredictions,
+  fetchPlaceDetails,
+  type PlacePrediction,
+} from '@/lib/google-places';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -59,6 +65,12 @@ export function PlotFormModal({ visible, onClose, onSave }: PlotFormModalProps) 
   const [pickerOptions, setPickerOptions] = useState<readonly string[]>([]);
   const [pickerKey, setPickerKey] = useState<keyof FarmerPlotPayload | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [placesModalOpen, setPlacesModalOpen] = useState(false);
+  const [placesQuery, setPlacesQuery] = useState('');
+  const [placesPredictions, setPlacesPredictions] = useState<PlacePrediction[]>([]);
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [placesDetailsLoading, setPlacesDetailsLoading] = useState(false);
+  const placesDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sowingDateAsDate = form.sowing_date
     ? (() => {
@@ -91,6 +103,55 @@ export function PlotFormModal({ visible, onClose, onSave }: PlotFormModalProps) 
     setPickerOptions([...options]);
     setPickerOpen(true);
   };
+
+  useEffect(() => {
+    if (!placesModalOpen) return;
+    if (placesDebounceRef.current) clearTimeout(placesDebounceRef.current);
+    if (placesQuery.trim().length < 2) {
+      setPlacesPredictions([]);
+      setPlacesLoading(false);
+      return;
+    }
+    setPlacesLoading(true);
+    placesDebounceRef.current = setTimeout(async () => {
+      placesDebounceRef.current = null;
+      try {
+        const list = await fetchPlacePredictions(placesQuery, { country: 'in' });
+        setPlacesPredictions(list);
+      } catch (e) {
+        setPlacesPredictions([]);
+        if (placesModalOpen) {
+          Alert.alert('Auto fill', e instanceof Error ? e.message : 'Search failed. Check API key has Places API enabled.');
+        }
+      } finally {
+        setPlacesLoading(false);
+      }
+    }, 300);
+    return () => {
+      if (placesDebounceRef.current) clearTimeout(placesDebounceRef.current);
+    };
+  }, [placesModalOpen, placesQuery]);
+
+  const handleSelectPlace = useCallback(async (placeId: string) => {
+    setPlacesDetailsLoading(true);
+    try {
+      const parsed = await fetchPlaceDetails(placeId);
+      setForm((prev) => ({
+        ...prev,
+        address: parsed.address,
+        pincode: parsed.pincode,
+        taluka: parsed.taluka,
+        district: parsed.district,
+      }));
+      setPlacesModalOpen(false);
+      setPlacesQuery('');
+      setPlacesPredictions([]);
+    } catch (e) {
+      Alert.alert('Auto fill', e instanceof Error ? e.message : 'Could not get address details.');
+    } finally {
+      setPlacesDetailsLoading(false);
+    }
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -218,6 +279,13 @@ export function PlotFormModal({ visible, onClose, onSave }: PlotFormModalProps) 
             )}
             {step === 2 && (
               <>
+                <TouchableOpacity
+                  onPress={() => setPlacesModalOpen(true)}
+                  style={[styles.autoFillBtn, { borderColor: colors.border }]}
+                  activeOpacity={0.7}>
+                  <IconSymbol name="mappin.circle.fill" size={20} color={colors.text} />
+                  <Text style={[styles.autoFillBtnText, { color: colors.text }]}>Auto fill from map</Text>
+                </TouchableOpacity>
                 <FieldLabel label="Address" />
                 <TextInput
                   style={[styles.input, styles.inputMultiline, { borderColor: colors.border, color: colors.text }]}
@@ -292,6 +360,48 @@ export function PlotFormModal({ visible, onClose, onSave }: PlotFormModalProps) 
           </View>
         </Pressable>
       </Modal>
+
+      <Modal visible={placesModalOpen} transparent animationType="fade">
+        <Pressable style={styles.pickerOverlay} onPress={() => !placesDetailsLoading && setPlacesModalOpen(false)}>
+          <Pressable style={[styles.placesBox, { backgroundColor: colors.background }]} onPress={() => {}}>
+            <Text style={[styles.placesTitle, { color: colors.text }]}>Search address</Text>
+            <TextInput
+              style={[styles.input, styles.placesInput, { borderColor: colors.border, color: colors.text }]}
+              value={placesQuery}
+              onChangeText={setPlacesQuery}
+              placeholder="Type village, city or full address…"
+              placeholderTextColor={colors.mutedForeground}
+              autoFocus
+              editable={!placesDetailsLoading}
+            />
+            {placesDetailsLoading ? (
+              <View style={styles.placesLoading}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={{ color: colors.text, marginTop: 8 }}>Getting address…</Text>
+              </View>
+            ) : placesLoading ? (
+              <View style={styles.placesLoading}>
+                <ActivityIndicator size="small" color={colors.primary} />
+              </View>
+            ) : (
+              <ScrollView style={styles.placesList} keyboardShouldPersistTaps="handled">
+                {placesPredictions.map((p) => (
+                  <TouchableOpacity
+                    key={p.place_id}
+                    style={[styles.pickerItem, { borderColor: colors.border }]}
+                    onPress={() => handleSelectPlace(p.place_id)}>
+                    <Text style={{ color: colors.text }} numberOfLines={2}>{p.description}</Text>
+                  </TouchableOpacity>
+                ))}
+                {placesQuery.trim().length >= 2 && !placesLoading && placesPredictions.length === 0 && (
+                  <Text style={[styles.placesEmpty, { color: colors.mutedForeground }]}>No results</Text>
+                )}
+              </ScrollView>
+            )}
+            <Button onPress={() => setPlacesModalOpen(false)} disabled={placesDetailsLoading}>Cancel</Button>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Modal>
   );
 }
@@ -321,6 +431,28 @@ const styles = StyleSheet.create({
   },
   scroll: { maxHeight: 610, padding: 16 },
   fieldLabel: { marginTop: 12, marginBottom: 4 },
+  autoFillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  autoFillBtnText: { fontSize: 15, fontWeight: '600' },
+  placesBox: {
+    borderRadius: 12,
+    maxHeight: 420,
+    marginHorizontal: 24,
+    padding: 16,
+  },
+  placesTitle: { fontSize: 16, fontWeight: '600', marginBottom: 10 },
+  placesInput: { marginBottom: 12 },
+  placesLoading: { paddingVertical: 24, alignItems: 'center' },
+  placesList: { maxHeight: 220 },
+  placesEmpty: { padding: 16, textAlign: 'center' },
   select: {
     borderWidth: 1,
     borderRadius: 8,

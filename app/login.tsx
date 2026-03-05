@@ -3,6 +3,8 @@ import { View, StyleSheet, KeyboardAvoidingView, Platform, Image, Alert } from '
 import { TextInput, Button, ActivityIndicator, useTheme, Text } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -10,6 +12,8 @@ export default function LoginScreen() {
   const { login, isLoading } = useAuth();
   const router = useRouter();
   const theme = useTheme();
+  const colorScheme = useColorScheme() ?? 'dark';
+  const emeraldBorder = Colors[colorScheme].emeraldBorder ?? Colors[colorScheme].cardBorder;
 
   const handleLoginAsFarmer = async () => {
     if (!email.trim() || !password) {
@@ -44,7 +48,7 @@ export default function LoginScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboard}>
-        <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: emeraldBorder }]}>
           <View style={styles.logoWrap}>
             <Image
               source={require('@/assets/images/digi-prishi-logo.webp')}
@@ -121,6 +125,7 @@ const styles = StyleSheet.create({
     padding: 24,
     borderRadius: 12,
     gap: 16,
+    borderWidth: 1,
   },
   logoWrap: {
     alignSelf: 'center',

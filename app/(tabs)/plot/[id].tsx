@@ -18,11 +18,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import area from '@turf/area';
 import { polygon as turfPolygon } from '@turf/helpers';
 import { fetchPlotMaps, trackPlotMap, createPlotMap, type PlotMapRecord } from '@/lib/api';
+import { GpsKalmanFilter } from '@/utils/gpsKalmanFilter';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { FARM_MAP_STYLE } from '@/constants/map-style';
 
 const SHEET_BG = '#0A0C0F';
 const GREEN = '#22C55E';
 const GREEN_DARK = '#16A34A';
+const EMERALD_BORDER = '#10b981';
 const GRAY = '#6B7280';
 const GRAY_LIGHT = '#9CA3AF';
 const WHITE = '#F9FAFB';
@@ -89,6 +92,7 @@ export default function PlotMapScreen() {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSentIdxRef = useRef(0);
   const pathRef = useRef(path);
+  const filterRef = useRef(new GpsKalmanFilter());
   pathRef.current = path;
 
   const loadSavedMaps = useCallback(async () => {
@@ -205,6 +209,7 @@ export default function PlotMapScreen() {
       Alert.alert('Permission needed', 'Location is required to record the boundary.');
       return;
     }
+    filterRef.current.reset();
     setSessionId(`sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
     setPath([]);
     setPointsSent(0);
@@ -215,33 +220,23 @@ export default function PlotMapScreen() {
 
   useEffect(() => {
     if (mode !== 'walking') return;
-    let lastLat: number | null = null;
-    let lastLng: number | null = null;
-    let lastAddedAt = 0;
-    const MIN_DISTANCE_M = 1;
-    const MAX_ACCURACY_M = 80;
-    const MIN_INTERVAL_MS = 2500;
     const sub = Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 2, timeInterval: 1500 },
+      {
+        accuracy: Location.Accuracy.BestForNavigation,
+        distanceInterval: Platform.OS === 'android' ? 0 : 2,
+        timeInterval: 1000, // Android: ensure time-based updates (recommended for Kalman)
+      },
       (loc) => {
-        const { latitude, longitude } = loc.coords;
         const acc = loc.coords.accuracy ?? 99;
         setAccuracy(Math.round(acc));
-        const now = Date.now();
-        const timeSinceLast = now - lastAddedAt;
-        const farEnough =
-          lastLat == null ||
-          lastLng == null ||
-          Math.hypot(
-            (latitude - lastLat) * 111320,
-            (longitude - lastLng) * 111320 * Math.cos((latitude * Math.PI) / 180)
-          ) >= MIN_DISTANCE_M;
-        const timeFallback = lastAddedAt === 0 || timeSinceLast >= MIN_INTERVAL_MS;
-        if (acc <= MAX_ACCURACY_M && (farEnough || timeFallback)) {
-          lastLat = latitude;
-          lastLng = longitude;
-          lastAddedAt = now;
-          setPath((prev) => [...prev, { latitude, longitude, accuracy: acc, timestamp: loc.timestamp }]);
+        const smoothed = filterRef.current.process({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          accuracy: loc.coords.accuracy ?? null,
+          timestamp: Date.now(),
+        });
+        if (smoothed) {
+          setPath((prev) => [...prev, smoothed]);
         }
       }
     );
@@ -278,7 +273,7 @@ export default function PlotMapScreen() {
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
-  }, [mode, sessionId, plotId, path.length]);
+  }, [mode, sessionId, plotId]);
 
   const stopWalking = useCallback(() => {
     locationSubRef.current?.remove();
@@ -294,6 +289,18 @@ export default function PlotMapScreen() {
     setPointsSent(0);
     setMode('idle');
   }, []);
+
+  const viewPlotOnMap = useCallback(
+    (m: PlotMapRecord) => {
+      if (!mapRef.current || !m.coordinates?.length) return;
+      const coords = m.coordinates.map((c) => ({ latitude: c.latitude, longitude: c.longitude }));
+      mapRef.current.fitToCoordinates(coords, {
+        edgePadding: { top: 60, right: 40, bottom: 260, left: 40 },
+        animated: true,
+      });
+    },
+    []
+  );
 
   const saveMap = useCallback(async () => {
     if (!plotId || path.length < 3 || !computedArea) return;
@@ -338,6 +345,18 @@ export default function PlotMapScreen() {
   const insets = useSafeAreaInsets();
 
   return (
+    <ErrorBoundary
+      onRetry={() => router.back()}
+      fallback={
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Map unavailable</Text>
+          <Text style={styles.errorMessage}>Something went wrong loading the map. Check that location permission is allowed and try again.</Text>
+          <TouchableOpacity style={styles.errorButton} onPress={() => router.back()}>
+            <Text style={styles.errorButtonText}>← Go back</Text>
+          </TouchableOpacity>
+        </View>
+      }
+    >
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 10), paddingBottom: 8 }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
@@ -537,12 +556,21 @@ export default function PlotMapScreen() {
                   <Text style={styles.farmName}>{m.name}</Text>
                   <Text style={styles.farmMeta}>{m.area_acres.toFixed(2)} acres</Text>
                 </View>
+                <TouchableOpacity
+                  style={styles.viewPlotButton}
+                  onPress={() => viewPlotOnMap(m)}
+                  activeOpacity={0.8}
+                  accessibilityLabel="View plot on map"
+                  accessibilityRole="button">
+                  <Text style={styles.viewPlotButtonText}>View plot</Text>
+                </TouchableOpacity>
               </View>
             ))}
           </View>
         )}
       </BottomSheet>
     </View>
+    </ErrorBoundary>
   );
 }
 
@@ -559,6 +587,17 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   mapWrapper: { flex: 1 },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: SHEET_BG,
+  },
+  errorTitle: { color: WHITE, fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  errorMessage: { color: GRAY_LIGHT, fontSize: 14, textAlign: 'center', marginBottom: 24 },
+  errorButton: { paddingVertical: 12, paddingHorizontal: 24, backgroundColor: GREEN, borderRadius: 12 },
+  errorButtonText: { color: WHITE, fontSize: 16, fontWeight: '600' },
   centreButton: {
     position: 'absolute',
     right: 16,
@@ -587,7 +626,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: EMERALD_BORDER,
   },
   topBarEmoji: { fontSize: 16 },
   topBarTitle: { color: 'white', fontSize: 14, fontWeight: '700' },
@@ -642,7 +681,7 @@ const styles = StyleSheet.create({
   areaCard: {
     backgroundColor: 'rgba(34,197,94,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.2)',
+    borderColor: EMERALD_BORDER,
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 14,
@@ -671,10 +710,20 @@ const styles = StyleSheet.create({
   farmsEmptyEmoji: { fontSize: 36, marginBottom: 8 },
   farmsEmptyText: { color: WHITE, fontSize: 15, fontWeight: '600', marginBottom: 2 },
   farmsEmptySub: { color: GRAY, fontSize: 13 },
-  farmRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 6 },
+  farmRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: EMERALD_BORDER, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 6 },
   farmRowIcon: { width: 36, height: 36, borderRadius: 10, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
   farmIconEmoji: { fontSize: 16 },
-  farmInfo: { flex: 1, marginLeft: 12 },
+  farmInfo: { flex: 1, marginLeft: 12, minWidth: 0 },
   farmName: { color: 'white', fontSize: 14, fontWeight: '600' },
   farmMeta: { color: GRAY, fontSize: 12 },
+  viewPlotButton: {
+    marginLeft: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: `${GREEN}30`,
+    borderWidth: 1,
+    borderColor: `${GREEN}66`,
+  },
+  viewPlotButtonText: { color: GREEN, fontSize: 13, fontWeight: '600' },
 });

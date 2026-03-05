@@ -22,6 +22,8 @@ import {
   uploadProfileImage,
   type FarmerCreatePayload,
 } from '@/lib/api';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const emptyForm = {
   farmer_code: '',
@@ -43,6 +45,8 @@ const emptyForm = {
 
 export default function AddFarmerScreen() {
   const theme = useTheme();
+  const colorScheme = useColorScheme() ?? 'dark';
+  const emeraldBorder = Colors[colorScheme].emeraldBorder ?? Colors[colorScheme].cardBorder;
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
@@ -136,7 +140,7 @@ export default function AddFarmerScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled">
         <Card
-          style={[styles.card, theme.dark && styles.cardPremiumDark]}
+          style={[styles.card, theme.dark && styles.cardPremiumDark, { borderWidth: 1, borderColor: emeraldBorder, borderRadius: 12, overflow: 'hidden' }]}
           mode="elevated">
           <Card.Title title="Profile picture (optional)" titleVariant="titleMedium" />
           <Card.Content style={styles.cardContent}>
@@ -156,7 +160,7 @@ export default function AddFarmerScreen() {
         </Card>
 
         <Card
-          style={[styles.card, theme.dark && styles.cardPremiumDark]}
+          style={[styles.card, theme.dark && styles.cardPremiumDark, { borderWidth: 1, borderColor: emeraldBorder, borderRadius: 12, overflow: 'hidden' }]}
           mode="elevated">
           <Card.Title title="Basic details" titleVariant="titleMedium" />
           <Card.Content style={styles.cardContent}>
@@ -236,7 +240,7 @@ export default function AddFarmerScreen() {
         </Card>
 
         <Card
-          style={[styles.card, theme.dark && styles.cardPremiumDark]}
+          style={[styles.card, theme.dark && styles.cardPremiumDark, { borderWidth: 1, borderColor: emeraldBorder, borderRadius: 12, overflow: 'hidden' }]}
           mode="elevated">
           <Card.Title title="Address" titleVariant="titleMedium" />
           <Card.Content style={styles.cardContent}>
@@ -268,7 +272,7 @@ export default function AddFarmerScreen() {
         </Card>
 
         <Card
-          style={[styles.card, theme.dark && styles.cardPremiumDark]}
+          style={[styles.card, theme.dark && styles.cardPremiumDark, { borderWidth: 1, borderColor: emeraldBorder, borderRadius: 12, overflow: 'hidden' }]}
           mode="elevated">
           <Card.Title title="Bank details" titleVariant="titleMedium" />
           <Card.Content style={styles.cardContent}>

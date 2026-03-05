@@ -46,7 +46,7 @@ const DOC_LABELS: Record<string, string> = {
   pan: 'PAN',
   aadhaar: 'Aadhaar',
   shg_byelaws: 'SHG bye-laws',
-  extract_7_12: '7/12 extract',
+  extract_7_12: 'Land Documents',
   consent_letter: 'Consent letter',
   bank_doc: 'Bank document',
   other: 'Other',
@@ -69,6 +69,8 @@ export default function FarmerDetailScreen() {
 
   const colorScheme = useColorScheme() ?? 'dark';
   const colors = Colors[colorScheme];
+  const docDividerColor = colorScheme === 'dark' ? 'rgba(250,250,250,0.22)' : 'rgba(26,26,26,0.14)';
+  const docButtonBorderColor = colorScheme === 'dark' ? 'rgba(250,250,250,0.45)' : 'rgba(26,26,26,0.3)';
 
   const screenWidth = Dimensions.get('window').width;
   const scrollPadding = 12;
@@ -290,7 +292,7 @@ export default function FarmerDetailScreen() {
   if (!farmer) {
     return (
       <ThemedView style={styles.centered}>
-        <ThemedText style={[styles.error, { color: colors.mutedForeground }]}>
+        <ThemedText style={[styles.error, { color: colors.text }]}>
           Farmer not found
         </ThemedText>
       </ThemedView>
@@ -323,7 +325,7 @@ export default function FarmerDetailScreen() {
         <ThemedText type="title" style={styles.name}>
           {farmer.name}
         </ThemedText>
-        <ThemedText style={[styles.code, { color: colors.mutedForeground }]}>
+        <ThemedText style={[styles.code, { color: colors.text, opacity: 0.9 }]}>
           {farmer.farmer_code}
         </ThemedText>
         <View style={[styles.badges, { marginTop: 12 }]}>
@@ -341,7 +343,7 @@ export default function FarmerDetailScreen() {
       
         </View>
 
-        <View style={[styles.baseCard, { overflow: 'hidden', borderRadius: 16, marginTop: 16 }]}>
+        <View style={[styles.baseCard, { overflow: 'hidden', borderRadius: 16, marginTop: 16, borderWidth: 1, borderColor: colors.emeraldBorder ?? colors.cardBorder }]}>
           <LinearGradient
             colors={[Colors.cardHeaderGreen.gradientStart, Colors.cardHeaderGreen.gradientEnd]}
             start={{ x: 0, y: 0 }}
@@ -409,7 +411,8 @@ export default function FarmerDetailScreen() {
                 style={{
                   fontSize: 13,
                   fontWeight: activeTab === key ? '700' : '400',
-                  color: activeTab === key ? colors.primary : colors.mutedForeground,
+                  color: colors.text,
+                  opacity: activeTab === key ? 1 : 0.88,
                 }}>
                 {label}
               </ThemedText>
@@ -465,16 +468,16 @@ export default function FarmerDetailScreen() {
                     key={docType}
                     style={[
                       styles.docRow,
-                      !isLast && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                      !isLast && { borderBottomWidth: 1, borderBottomColor: docDividerColor },
                     ]}>
                     <View style={styles.docRowLeft}>
                       <IconSymbol
                         name="doc.fill"
                         size={20}
-                        color={has ? colors.primary : '#fff'}
+                        color={colors.text}
                       />
                       <ThemedText
-                        style={[styles.docRowLabel, { color: has ? colors.text : '#fff' }]}
+                        style={[styles.docRowLabel, { color: colors.text }]}
                         numberOfLines={1}>
                         {DOC_LABELS[docType] ?? docType}
                       </ThemedText>
@@ -487,7 +490,7 @@ export default function FarmerDetailScreen() {
                             disabled={loading}
                             style={styles.docRowIconBtn}
                             accessibilityLabel="View document">
-                            <IconSymbol name="eye.fill" size={22} color={colors.primary} />
+                            <IconSymbol name="eye.fill" size={22} color={colors.text} />
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => handleReuploadDoc(docType)}
@@ -495,9 +498,9 @@ export default function FarmerDetailScreen() {
                             style={styles.docRowIconBtn}
                             accessibilityLabel="Replace document">
                             {loading ? (
-                              <ActivityIndicator size="small" color={colors.primary} />
+                              <ActivityIndicator size="small" color={colors.text} />
                             ) : (
-                              <IconSymbol name="arrow.triangle.2.circlepath" size={22} color={colors.primary} />
+                              <IconSymbol name="arrow.triangle.2.circlepath" size={22} color={colors.text} />
                             )}
                           </TouchableOpacity>
                           <TouchableOpacity
@@ -512,11 +515,11 @@ export default function FarmerDetailScreen() {
                         <TouchableOpacity
                           onPress={() => handleReuploadDoc(docType)}
                           disabled={loading}
-                          style={[styles.docUploadBtn, { borderWidth: 1.5, borderColor: colors.primary, backgroundColor: 'transparent' }]}>
+                          style={[styles.docUploadBtn, { borderWidth: 1.5, borderColor: docButtonBorderColor, backgroundColor: 'transparent' }]}>
                           {loading ? (
-                            <ActivityIndicator size="small" color={colors.primary} />
+                            <ActivityIndicator size="small" color={colors.text} />
                           ) : (
-                            <ThemedText style={[styles.docUploadBtnText, { color: colors.primary }]}>Upload</ThemedText>
+                            <ThemedText style={[styles.docUploadBtnText, { color: colors.text }]}>Upload</ThemedText>
                           )}
                         </TouchableOpacity>
                       )}
@@ -537,9 +540,9 @@ export default function FarmerDetailScreen() {
                 style={[styles.addPlotCard, { borderColor: colors.primary, backgroundColor: colors.card }]}
                 onPress={() => setPlotFormVisible(true)}
                 activeOpacity={0.8}>
-                <IconSymbol name="plus.circle.fill" size={56} color={colors.primary} />
-                <ThemedText type="subtitle" style={styles.addPlotTitle}>Add Plot</ThemedText>
-                <ThemedText style={[styles.addPlotSub, { color: colors.mutedForeground }]}>
+                <IconSymbol name="plus.circle.fill" size={56} color={colors.text} />
+                <ThemedText type="subtitle" style={[styles.addPlotTitle, { color: colors.text }]}>Add Plot</ThemedText>
+                <ThemedText style={[styles.addPlotSub, { color: colors.text, opacity: 0.9 }]}>
                   Tap to add season, variety, land & address
                 </ThemedText>
               </TouchableOpacity>
@@ -549,15 +552,15 @@ export default function FarmerDetailScreen() {
                   style={[styles.addPlotCardSmall, { borderColor: colors.primary }]}
                   onPress={() => setPlotFormVisible(true)}
                   activeOpacity={0.8}>
-                  <IconSymbol name="plus.circle.fill" size={32} color={colors.primary} />
-                  <ThemedText style={[styles.addPlotTitleSmall, { color: colors.primary }]}>Add another plot</ThemedText>
+                  <IconSymbol name="plus.circle.fill" size={32} color={colors.text} />
+                  <ThemedText style={[styles.addPlotTitleSmall, { color: colors.text }]}>Add another plot</ThemedText>
                 </TouchableOpacity>
                 {plots.map((plot) => {
                   const plotTitle = [plot.season, plot.variety].filter(Boolean).join(' · ') || 'Plot';
                   const plotMeta = [plot.land_size_value != null && `${plot.land_size_value} ${plot.units ?? ''}`.trim(), plot.taluka, plot.district].filter(Boolean).join(' · ') || '—';
                   const goToPlot = () => router.push({ pathname: '/plot/[id]', params: { id: plot.id, plotTitle, plotMeta } });
                   return (
-                    <View key={plot.id} style={[styles.plotCard, { borderColor: colors.border }]}>
+                    <View key={plot.id} style={[styles.plotCard, { borderColor: colors.emeraldBorder ?? colors.cardBorder ?? colors.border }]}>
                       <TouchableOpacity activeOpacity={0.9} onPress={goToPlot}>
                         <Image
                           source={{ uri: 'https://568a6n8a8z.ucarecd.net/53e42c26-a358-4ae0-bfec-75f3b96e13a4/-/preview/1000x666/' }}
@@ -571,11 +574,11 @@ export default function FarmerDetailScreen() {
                             <ThemedText type="subtitle" style={styles.plotCardTitle}>
                               {plotTitle}
                             </ThemedText>
-                            <ThemedText style={[styles.plotCardMeta, { color: colors.mutedForeground }]}>
+                            <ThemedText style={[styles.plotCardMeta, { color: colors.text, opacity: 0.9 }]}>
                               {plotMeta}
                             </ThemedText>
                             {plot.sowing_date ? (
-                              <ThemedText style={[styles.plotCardMeta, { color: colors.mutedForeground }]}>
+                              <ThemedText style={[styles.plotCardMeta, { color: colors.text, opacity: 0.9 }]}>
                                 Sowing: {plot.sowing_date}
                               </ThemedText>
                             ) : null}
@@ -639,11 +642,11 @@ function Row({
 }: {
   label: string;
   value: string;
-  colors: { mutedForeground: string };
+  colors: { text: string };
 }) {
   return (
     <View style={styles.row}>
-      <ThemedText style={[styles.rowLabel, { color: colors.mutedForeground }]}>
+      <ThemedText style={[styles.rowLabel, { color: colors.text, opacity: 0.9 }]}>
         {label}
       </ThemedText>
       <ThemedText style={styles.rowValue} numberOfLines={2}>
@@ -661,10 +664,11 @@ function InfoCard({
 }: {
   title: string;
   icon: 'person.fill' | 'mappin.circle.fill' | 'person.3.fill' | 'banknote.fill' | 'doc.fill';
-  colors: { card: string; border: string; muted: string; primary: string; mutedForeground: string };
+  colors: { card: string; border: string; muted: string; primary: string; mutedForeground: string; emeraldBorder?: string; cardBorder?: string };
   children: React.ReactNode;
 }) {
   const { gradientStart, gradientEnd, text: headerText, icon: headerIcon } = Colors.cardHeaderGreen;
+  const cardBorderColor = colors.emeraldBorder ?? colors.cardBorder ?? colors.border;
   return (
     <View
       style={{
@@ -672,7 +676,7 @@ function InfoCard({
         borderRadius: 16,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: cardBorderColor,
       }}>
       <LinearGradient
         colors={[gradientStart, gradientEnd]}
