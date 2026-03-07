@@ -347,6 +347,10 @@ export async function fetchPlots(farmerId: string) {
   return api<FarmerPlotRecord[]>(`/farmers/${farmerId}/plots`);
 }
 
+export async function getPlot(farmerId: string, plotId: string) {
+  return api<FarmerPlotRecord>(`/farmers/${farmerId}/plots/${plotId}`);
+}
+
 export async function createPlot(farmerId: string, payload: FarmerPlotPayload) {
   return api<FarmerPlotRecord>(`/farmers/${farmerId}/plots`, {
     method: 'POST',

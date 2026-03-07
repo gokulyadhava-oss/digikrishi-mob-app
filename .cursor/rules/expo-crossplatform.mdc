@@ -1,0 +1,109 @@
+# Expo Cross-Platform Rules — Android First
+
+---
+
+## 🏗️ Architecture
+
+- One truth per value. Colors, spacing, fonts → `constants/`. Never inline.
+- Reusable UI → `components/`. Never rebuild in screens.
+- API calls → `lib/api.ts`. Never fetch inside components.
+- Platform logic → `utils/platform.ts`. Never scatter `Platform.OS` checks.
+- Types → `types/`. Never re-declare the same shape twice.
+
+---
+
+## 📱 Android — Always
+
+- `PROVIDER_GOOGLE` on every `<MapView>`. No exceptions.
+- Use `animateToRegion()` for map camera. Never `fitToCoordinates()` or `animateCamera({ zoom })` — broken on most OEMs.
+- `watchPositionAsync` needs both `distanceInterval` AND `timeInterval: 1000` — Android ignores distance-only.
+- `TextInput` always gets `underlineColorAndroid="transparent"`.
+- `Pressable` always gets `android_ripple={{ color: 'rgba(255,255,255,0.1)' }}`.
+- Font weights: only `'400' '600' '700' '800'` — Android drops others silently.
+- `letterSpacing` needs `includeFontPadding: false` to render right.
+
+---
+
+## 🗺️ Maps
+
+```ts
+// utils/platform.ts — declare once, use everywhere
+export function fitMap(ref: MapView, coords: LatLng[], paddingFactor = 1.6) {
+  if (Platform.OS === 'android') {
+    ref.animateToRegion(regionFromCoords(coords, paddingFactor), 600);
+  } else {
+    ref.fitToCoordinates(coords, {
+      edgePadding: { top: 60, right: 40, bottom: 260, left: 40 },
+      animated: true,
+    });
+  }
+}
+
+export function regionFromCoords(coords: LatLng[], pad = 1.5) {
+  if (!coords.length) return DEFAULT_REGION;
+  const lats = coords.map((c) => c.latitude);
+  const lngs = coords.map((c) => c.longitude);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  return {
+    latitude: (minLat + maxLat) / 2,
+    longitude: (minLng + maxLng) / 2,
+    latitudeDelta: Math.max(maxLat - minLat, 0.0001) * pad,
+    longitudeDelta: Math.max(maxLng - minLng, 0.0001) * pad,
+  };
+}
+```
+Call `fitMap(mapRef.current, coords)` everywhere. Never repeat this logic.
+
+---
+
+## 📍 Location
+
+- Always check permissions before requesting. Never request cold.
+- Wrap `getCurrentPositionAsync` in an 8s timeout — it hangs on some Android OEMs.
+- GPS quality: `<15m` good · `15–30m` warn · `>30m` bad. Use shared `gpsQuality(acc)` util.
+
+---
+
+## 🎨 Layout & Safe Area
+
+- Header padding → `Math.max(insets.top, 10)`. Never hardcode.
+- Bottom UI padding → `Math.max(insets.bottom, 16)`. Covers gesture bar on Android 10+.
+- Any absolute child in a rounded container → parent needs `overflow: 'hidden'`.
+
+---
+
+## 🧩 Components
+
+- Small touch targets (<44pt) → always add `hitSlop={12}`.
+- Loading + error states → every data-fetching screen gets both. Use shared `<LoadingView />` and `<ErrorView />`.
+- Screens with maps/native modules → always wrap in `<ErrorBoundary>`.
+- Never pass color/size/style as props if it's already in `constants/`. Import directly.
+
+---
+
+## 🔁 Effects & Async
+
+- Every async effect → cancellation flag (`let cancelled = false`).
+- Every subscription/interval → cleaned up in `useEffect` return.
+- State needed inside intervals → store in a ref, update ref every render.
+
+---
+
+## 📦 Data
+
+- Every API call → `try/catch/finally`. `finally` always clears loading state.
+- Never silently swallow errors. Show `Alert` for user-facing failures.
+
+---
+
+## ✅ Ship Checklist
+
+- [ ] No `fitToCoordinates` or `animateCamera({ zoom })` on Android paths
+- [ ] All map calls go through `fitMap()` / `regionFromCoords()`
+- [ ] `PROVIDER_GOOGLE` on all `<MapView>`
+- [ ] Safe area insets on all headers and bottom UI
+- [ ] Location permission checked before every call
+- [ ] All effects have cleanup + cancellation
+- [ ] No inline colors, sizes, or strings — everything from `constants/`
+- [ ] Shared `<LoadingView>`, `<ErrorView>`, `<ErrorBoundary>` used everywhere

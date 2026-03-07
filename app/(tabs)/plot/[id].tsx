@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +18,8 @@ import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import area from '@turf/area';
 import { polygon as turfPolygon } from '@turf/helpers';
-import { fetchPlotMaps, trackPlotMap, createPlotMap, type PlotMapRecord } from '@/lib/api';
+import { fetchPlotMaps, trackPlotMap, createPlotMap, getPlot, updatePlot, type PlotMapRecord } from '@/lib/api';
+import { reverseGeocode } from '@/lib/google-places';
 import { GpsKalmanFilter } from '@/utils/gpsKalmanFilter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { FARM_MAP_STYLE } from '@/constants/map-style';
@@ -52,6 +54,45 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
+function DrawPointIndicator({ nextPoint }: { nextPoint: number }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (nextPoint > 4) return;
+    pulseAnim.setValue(1);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.35, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [nextPoint, pulseAnim]);
+
+  return (
+    <View style={styles.drawPointRow}>
+      <Text style={styles.drawPointLabel}>Next: </Text>
+      {[1, 2, 3, 4].map((n) => {
+        const isNext = n === nextPoint;
+        const placed = n < nextPoint;
+        const content = (
+          <View style={[styles.drawPointPill, placed && styles.drawPointPillPlaced, isNext && styles.drawPointPillNext]}>
+            <Text style={[styles.drawPointPillText, (placed || isNext) && { color: WHITE }]}>{n}</Text>
+          </View>
+        );
+        if (isNext) {
+          return (
+            <Animated.View key={n} style={[{ transform: [{ scale: pulseAnim }] }]}>
+              {content}
+            </Animated.View>
+          );
+        }
+        return <View key={n}>{content}</View>;
+      })}
+    </View>
+  );
+}
+
 function getAreaFromPath(path: { latitude: number; longitude: number }[]) {
   if (path.length < 3) return { area_m2: 0, area_acres: 0, area_hectares: 0 };
   const ring = [...path];
@@ -66,16 +107,49 @@ function getAreaFromPath(path: { latitude: number; longitude: number }[]) {
   return { area_m2, area_acres, area_hectares };
 }
 
+/** Compute map region (center + deltas) from coordinates with padding. Reliable on Android vs fitToCoordinates. */
+function regionFromCoordinates(
+  coords: { latitude: number; longitude: number }[],
+  paddingFactor = 1.5
+): { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } {
+  if (coords.length === 0) {
+    return { ...DEFAULT_REGION };
+  }
+  if (coords.length === 1) {
+    return {
+      latitude: coords[0].latitude,
+      longitude: coords[0].longitude,
+      latitudeDelta: 0.002,
+      longitudeDelta: 0.002,
+    };
+  }
+  const lats = coords.map((c) => c.latitude);
+  const lngs = coords.map((c) => c.longitude);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const latSpan = Math.max(maxLat - minLat, 0.0001);
+  const lngSpan = Math.max(maxLng - minLng, 0.0001);
+  return {
+    latitude: (minLat + maxLat) / 2,
+    longitude: (minLng + maxLng) / 2,
+    latitudeDelta: latSpan * paddingFactor,
+    longitudeDelta: lngSpan * paddingFactor,
+  };
+}
+
 export default function PlotMapScreen() {
-  const { id: plotId, plotTitle = 'Plot', plotMeta = '' } = useLocalSearchParams<{
+  const { id: plotId, farmerId, plotTitle = 'Plot', plotMeta = '' } = useLocalSearchParams<{
     id: string;
+    farmerId?: string;
     plotTitle?: string;
     plotMeta?: string;
   }>();
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
   const [activeTab, setActiveTab] = useState<'measure' | 'farms'>('measure');
-  const [mode, setMode] = useState<'idle' | 'walking' | 'done' | 'saved'>('idle');
+  const [mode, setMode] = useState<'idle' | 'walking' | 'drawing' | 'done' | 'saved'>('idle');
   const [path, setPath] = useState<{ latitude: number; longitude: number; accuracy?: number; timestamp?: number }[]>([]);
   const [savedMaps, setSavedMaps] = useState<PlotMapRecord[]>([]);
   const [savedMapsLoading, setSavedMapsLoading] = useState(false);
@@ -86,6 +160,7 @@ export default function PlotMapScreen() {
   const [farmName, setFarmName] = useState('');
   const [saveLoading, setSaveLoading] = useState(false);
   const [initialLocationSet, setInitialLocationSet] = useState(false);
+  const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const computedArea = path.length >= 3 ? getAreaFromPath(path.map((p) => ({ latitude: p.latitude, longitude: p.longitude }))) : null;
 
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
@@ -146,9 +221,9 @@ export default function PlotMapScreen() {
     return () => { cancelled = true; };
   }, [initialLocationSet]);
 
-  // Fit map to path while walking: first point = center+zoom; 2+ points = fit all with room above sheet.
+  // Fit map to path while walking or drawing: first point = center+zoom; 2+ points = fit all with room above sheet.
   useEffect(() => {
-    if (mode !== 'walking' || path.length === 0 || !mapRef.current) return;
+    if ((mode !== 'walking' && mode !== 'drawing') || path.length === 0 || !mapRef.current) return;
 
     if (path.length === 1) {
       mapRef.current.animateCamera(
@@ -163,14 +238,42 @@ export default function PlotMapScreen() {
       return;
     }
 
-    mapRef.current.fitToCoordinates(
-      path.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
-      {
-        edgePadding: { top: 24, right: 40, bottom: 220, left: 40 },
-        animated: true,
-      }
-    );
+    if (Platform.OS === 'android') {
+      const region = regionFromCoordinates(
+        path.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
+        1.5
+      );
+      mapRef.current.animateToRegion(region, 600);
+    } else {
+      mapRef.current.fitToCoordinates(
+        path.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
+        { edgePadding: { top: 24, right: 40, bottom: 220, left: 40 }, animated: true }
+      );
+    }
   }, [mode, path.length, path]);
+
+  const startDrawing = useCallback(() => {
+    setPath([]);
+    setMode('drawing');
+  }, []);
+
+  const handleMapPress = useCallback(
+    (e: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) => {
+      if (mode !== 'drawing' || path.length >= 4) return;
+      const { latitude, longitude } = e.nativeEvent.coordinate;
+      setPath((prev) => [...prev, { latitude, longitude }]);
+    },
+    [mode, path.length]
+  );
+
+  useEffect(() => {
+    if (mode === 'drawing' && path.length === 4) setMode('done');
+  }, [mode, path.length]);
+
+  const removeLastDrawPoint = useCallback(() => {
+    if (mode !== 'drawing' || path.length === 0) return;
+    setPath((prev) => prev.slice(0, -1));
+  }, [mode, path.length]);
 
   const centerOnMe = useCallback(async () => {
     if (!mapRef.current) return;
@@ -290,21 +393,26 @@ export default function PlotMapScreen() {
     setMode('idle');
   }, []);
 
-  const viewPlotOnMap = useCallback(
-    (m: PlotMapRecord) => {
-      if (!mapRef.current || !m.coordinates?.length) return;
-      const coords = m.coordinates.map((c) => ({ latitude: c.latitude, longitude: c.longitude }));
+  const viewPlotOnMap = useCallback((m: PlotMapRecord) => {
+    if (!mapRef.current || !m.coordinates?.length) return;
+    const coords = m.coordinates.map((c) => ({ latitude: c.latitude, longitude: c.longitude }));
+
+    if (Platform.OS === 'android') {
+      const region = regionFromCoordinates(coords, 1.6);
+      mapRef.current.animateToRegion(region, 600);
+    } else {
       mapRef.current.fitToCoordinates(coords, {
         edgePadding: { top: 60, right: 40, bottom: 260, left: 40 },
         animated: true,
       });
-    },
-    []
-  );
+    }
+  }, []);
 
   const saveMap = useCallback(async () => {
     if (!plotId || path.length < 3 || !computedArea) return;
     setSaveLoading(true);
+    const firstLat = path[0].latitude;
+    const firstLng = path[0].longitude;
     try {
       const coords = path.map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
       await createPlotMap({
@@ -312,13 +420,34 @@ export default function PlotMapScreen() {
         session_id: sessionId ?? undefined,
         name: (farmName && farmName.trim()) || plotTitle || 'Plot map',
         coordinates: coords,
-        gps_path: path,
+        gps_path: path.length > 0 ? path.map((p) => ({ latitude: p.latitude, longitude: p.longitude })) : undefined,
         area_m2: computedArea.area_m2,
         area_acres: computedArea.area_acres,
         area_hectares: computedArea.area_hectares,
       });
       setMode('saved');
       loadSavedMaps();
+
+      if (farmerId && path.length > 0) {
+        (async () => {
+          try {
+            const plot = await getPlot(farmerId, plotId);
+            const hasAddress = !!(plot.address?.trim() || plot.district?.trim());
+            if (!hasAddress) {
+              const parsed = await reverseGeocode(firstLat, firstLng);
+              await updatePlot(farmerId, plotId, {
+                address: parsed.address || null,
+                pincode: parsed.pincode || null,
+                taluka: parsed.taluka || null,
+                district: parsed.district || null,
+              });
+            }
+          } catch (_) {
+            // ignore backfill failure
+          }
+        })();
+      }
+
       setTimeout(() => {
         redo();
         setActiveTab('farms');
@@ -328,7 +457,7 @@ export default function PlotMapScreen() {
     } finally {
       setSaveLoading(false);
     }
-  }, [plotId, path, computedArea, sessionId, farmName, plotTitle, loadSavedMaps, redo]);
+  }, [plotId, farmerId, path, computedArea, sessionId, farmName, plotTitle, loadSavedMaps, redo]);
 
   const pathCoords = path.map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
   const closedPath = path.length >= 3 ? [...pathCoords, pathCoords[0]] : pathCoords;
@@ -390,8 +519,8 @@ export default function PlotMapScreen() {
         <MapView
           ref={mapRef}
           provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-          mapType="standard"
-          customMapStyle={FARM_MAP_STYLE as any}
+          mapType={mapType}
+          customMapStyle={mapType === 'standard' ? (FARM_MAP_STYLE as any) : undefined}
           showsUserLocation={true}
           showsMyLocationButton={true}
           showsBuildings={false}
@@ -402,6 +531,7 @@ export default function PlotMapScreen() {
           rotateEnabled
           style={StyleSheet.absoluteFill}
           initialRegion={initialRegion}
+          onPress={mode === 'drawing' ? handleMapPress : undefined}
         >
         {savedMaps.map((m) => (
           <Polygon
@@ -431,13 +561,52 @@ export default function PlotMapScreen() {
             geodesic={true}
           />
         )}
-        {pathCoords.length >= 1 && (mode === 'walking' || mode === 'done' || mode === 'saved') && (
+        {(mode === 'drawing' || mode === 'done' || mode === 'saved') && pathCoords.length >= 1 && pathCoords.map((coord, idx) => (
+          <Marker
+            key={idx}
+            coordinate={coord}
+            pinColor={GREEN}
+            title={`${idx + 1}`}
+          />
+        ))}
+        {mode === 'drawing' && pathCoords.length >= 2 && (
+          <>
+            <Polyline
+              coordinates={pathCoords}
+              strokeColor={GOLD}
+              strokeWidth={4}
+              lineJoin="round"
+              lineCap="round"
+              geodesic={true}
+            />
+            <Polyline
+              coordinates={[pathCoords[pathCoords.length - 1], pathCoords[0]]}
+              strokeColor="rgba(255,215,0,0.8)"
+              strokeWidth={3}
+              lineDashPattern={[10, 6]}
+              lineJoin="round"
+              lineCap="round"
+              geodesic={true}
+            />
+          </>
+        )}
+        {pathCoords.length >= 1 && mode === 'walking' && (
           <Marker coordinate={pathCoords[0]} pinColor="green" title="Start" />
         )}
         {(mode === 'done' || mode === 'saved') && closedPath.length > 2 && (
           <Polygon coordinates={closedPath} fillColor="rgba(34,197,94,0.22)" strokeColor={GREEN} strokeWidth={3} />
         )}
         </MapView>
+        <TouchableOpacity
+          style={styles.mapTypeButton}
+          onPress={() => setMapType((t) => (t === 'standard' ? 'satellite' : 'standard'))}
+          activeOpacity={0.85}
+          accessibilityLabel={mapType === 'standard' ? 'Switch to satellite view' : 'Switch to map view'}
+        >
+          <Text style={styles.mapTypeButtonLabel} numberOfLines={1}>
+            {mapType === 'standard' ? '🛰 Satellite view' : '🗺 Map view'}
+          </Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.centreButton}
           onPress={centerOnMe}
@@ -463,12 +632,31 @@ export default function PlotMapScreen() {
             {mode === 'idle' && (
               <>
                 <Text style={styles.idleText}>
-                  Walk along the boundary of your farm.{'\n'}GPS path syncs every 5 seconds.
+                  Walk the boundary or tap Draw to place 4 corners.
                 </Text>
-                <TouchableOpacity activeOpacity={0.9} onPress={startWalking} style={styles.primaryButton}>
-                  <LinearGradient colors={[GREEN_DARK, GREEN]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-                  <Text style={styles.primaryButtonText}>🚶 Start Walking</Text>
-                </TouchableOpacity>
+                <View style={styles.idleButtonRow}>
+                  <TouchableOpacity activeOpacity={0.9} onPress={startWalking} style={styles.primaryButton}>
+                    <LinearGradient colors={[GREEN_DARK, GREEN]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                    <Text style={styles.primaryButtonText}>🚶 Start Walking</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity activeOpacity={0.9} onPress={startDrawing} style={styles.drawPlotButton}>
+                    <LinearGradient colors={[GREEN_DARK, GREEN]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, styles.drawPlotButtonGradient]} />
+                    <Text style={styles.drawPlotButtonText}>✏️ Draw plot</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+            {mode === 'drawing' && (
+              <>
+                <Text style={styles.drawingText}>
+                  Tap the map to place 4 corners.
+                </Text>
+                <DrawPointIndicator nextPoint={path.length + 1} />
+                {path.length > 0 && (
+                  <TouchableOpacity activeOpacity={0.9} onPress={removeLastDrawPoint} style={styles.secondaryButtonDrawing}>
+                    <Text style={styles.secondaryButtonText}>↩ Remove last point</Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
             {mode === 'walking' && (
@@ -499,9 +687,15 @@ export default function PlotMapScreen() {
                     {computedArea.area_hectares.toFixed(3)} ha · {Math.round(computedArea.area_m2).toLocaleString()} m²
                   </Text>
                 </View>
-                <View style={styles.statRow}>
-                  <StatPill label="Synced pts" value={String(pointsSent)} accent={GREEN} />
-                </View>
+                {sessionId ? (
+                  <View style={styles.statRow}>
+                    <StatPill label="Synced pts" value={String(pointsSent)} accent={GREEN} />
+                  </View>
+                ) : (
+                  <View style={styles.statRow}>
+                    <StatPill label="Points" value={String(path.length)} accent={GREEN} />
+                  </View>
+                )}
                 <View style={[styles.farmNameInput, { borderColor: 'rgba(255,255,255,0.1)' }]}>
                   <Text style={styles.farmNameEmoji}>🌾</Text>
                   <TextInput
@@ -598,6 +792,27 @@ const styles = StyleSheet.create({
   errorMessage: { color: GRAY_LIGHT, fontSize: 14, textAlign: 'center', marginBottom: 24 },
   errorButton: { paddingVertical: 12, paddingHorizontal: 24, backgroundColor: GREEN, borderRadius: 12 },
   errorButtonText: { color: WHITE, fontSize: 16, fontWeight: '600' },
+  mapTypeButton: {
+    position: 'absolute',
+    left: 16,
+    bottom: 240,
+    backgroundColor: 'rgba(10,12,15,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  mapTypeButtonLabel: {
+    color: WHITE,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   centreButton: {
     position: 'absolute',
     right: 16,
@@ -658,7 +873,35 @@ const styles = StyleSheet.create({
   tabTextActive: { color: 'white' },
   tabContent: { minHeight: 80 },
   idleText: { color: GRAY_LIGHT, fontSize: 14, textAlign: 'center', marginBottom: 14, lineHeight: 22 },
-  primaryButton: { height: 50, borderRadius: 16, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  idleButtonRow: { flexDirection: 'row', gap: 10, alignItems: 'stretch' },
+  primaryButton: { flex: 1, height: 50, borderRadius: 16, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  drawPlotButton: {
+    minWidth: 128,
+    height: 50,
+    borderRadius: 16,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  drawPlotButtonGradient: { borderRadius: 16 },
+  drawPlotButtonText: { color: WHITE, fontSize: 15, fontWeight: '700' },
+  drawingText: { color: GRAY_LIGHT, fontSize: 14, textAlign: 'center', marginBottom: 12, lineHeight: 22 },
+  drawPointRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 12 },
+  drawPointLabel: { color: GRAY_LIGHT, fontSize: 14, fontWeight: '600' },
+  drawPointPill: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  drawPointPillPlaced: { backgroundColor: `${GREEN}99`, borderColor: GREEN },
+  drawPointPillNext: { backgroundColor: GREEN, borderColor: WHITE },
+  drawPointPillText: { color: GRAY_LIGHT, fontSize: 18, fontWeight: '800' },
+  secondaryButtonDrawing: { paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 14, alignItems: 'center', marginBottom: 8 },
   primaryButtonText: { color: 'white', fontSize: 17, fontWeight: '700' },
   statRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   statPill: {

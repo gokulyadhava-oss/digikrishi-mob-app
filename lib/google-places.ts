@@ -1,10 +1,11 @@
 /**
- * Google Places Autocomplete + Place Details for address auto-fill.
- * Uses legacy Places API (enable "Places API" in Google Cloud for the key).
+ * Google Places Autocomplete + Place Details, and Geocoding (reverse) for address auto-fill.
+ * Places API and Geocoding API must be enabled for the key.
  * Key from EXPO_PUBLIC_GOOGLE_MAPS_APIKEY (same as Maps).
  */
 
-const BASE = 'https://maps.googleapis.com/maps/api/place';
+const PLACE_BASE = 'https://maps.googleapis.com/maps/api/place';
+const GEOCODE_BASE = 'https://maps.googleapis.com/maps/api/geocode';
 
 export interface PlacePrediction {
   place_id: string;
@@ -38,7 +39,7 @@ export async function fetchPlacePredictions(
     key,
     ...(options?.country && { components: `country:${options.country}` }),
   });
-  const url = `${BASE}/autocomplete/json?${params.toString()}`;
+  const url = `${PLACE_BASE}/autocomplete/json?${params.toString()}`;
   const res = await fetch(url);
   const data = await res.json();
   if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
@@ -60,7 +61,7 @@ export async function fetchPlaceDetails(placeId: string): Promise<ParsedAddress>
     key,
     fields: 'address_components,formatted_address',
   });
-  const url = `${BASE}/details/json?${params.toString()}`;
+  const url = `${PLACE_BASE}/details/json?${params.toString()}`;
   const res = await fetch(url);
   const data = await res.json();
   if (data.status !== 'OK') {
@@ -73,6 +74,38 @@ export async function fetchPlaceDetails(placeId: string): Promise<ParsedAddress>
   return parseAddressComponents(
     result.formatted_address ?? '',
     result.address_components ?? []
+  );
+}
+
+/**
+ * Reverse geocode: lat/lng → address, pincode, taluka, district.
+ * One-shot fill from current location (no search).
+ */
+export async function reverseGeocode(lat: number, lng: number): Promise<ParsedAddress> {
+  const key = getApiKey();
+  if (!key) throw new Error('Google Maps API key not configured');
+
+  const params = new URLSearchParams({
+    latlng: `${lat},${lng}`,
+    key,
+  });
+  const url = `${GEOCODE_BASE}/json?${params.toString()}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+    throw new Error(data.error_message ?? data.status ?? 'Reverse geocode failed');
+  }
+  const results = (data.results ?? []) as Array<{
+    formatted_address?: string;
+    address_components?: Array<{ long_name: string; short_name: string; types: string[] }>;
+  }>;
+  const first = results[0];
+  if (!first) {
+    return { address: '', pincode: null, taluka: null, district: null };
+  }
+  return parseAddressComponents(
+    first.formatted_address ?? '',
+    first.address_components ?? []
   );
 }
 

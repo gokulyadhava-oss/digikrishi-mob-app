@@ -13,11 +13,11 @@ export default function FarmerPlotRedirect() {
 
   useEffect(() => {
     if (plotId) {
-      router.replace({ pathname: '/plot/[id]', params: { id: plotId, plotTitle, plotMeta } });
+      router.replace({ pathname: '/plot/[id]', params: { id: plotId, farmerId: _farmerId as string, plotTitle, plotMeta } });
     } else {
       router.back();
     }
-  }, [plotId, plotTitle, plotMeta, router]);
+  }, [plotId, _farmerId, plotTitle, plotMeta, router]);
 
   return null;
 }

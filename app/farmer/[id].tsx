@@ -558,7 +558,7 @@ export default function FarmerDetailScreen() {
                 {plots.map((plot) => {
                   const plotTitle = [plot.season, plot.variety].filter(Boolean).join(' · ') || 'Plot';
                   const plotMeta = [plot.land_size_value != null && `${plot.land_size_value} ${plot.units ?? ''}`.trim(), plot.taluka, plot.district].filter(Boolean).join(' · ') || '—';
-                  const goToPlot = () => router.push({ pathname: '/plot/[id]', params: { id: plot.id, plotTitle, plotMeta } });
+                  const goToPlot = () => router.push({ pathname: '/plot/[id]', params: { id: plot.id, farmerId: String(id), plotTitle, plotMeta } });
                   return (
                     <View key={plot.id} style={[styles.plotCard, { borderColor: colors.emeraldBorder ?? colors.cardBorder ?? colors.border }]}>
                       <TouchableOpacity activeOpacity={0.9} onPress={goToPlot}>
