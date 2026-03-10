@@ -1,17 +1,6 @@
-# Expo Cross-Platform Rules — Android First
-
 ---
-
-## 🏗️ Architecture
-
-- One truth per value. Colors, spacing, fonts → `constants/`. Never inline.
-- Reusable UI → `components/`. Never rebuild in screens.
-- API calls → `lib/api.ts`. Never fetch inside components.
-- Platform logic → `utils/platform.ts`. Never scatter `Platform.OS` checks.
-- Types → `types/`. Never re-declare the same shape twice.
-
+alwaysApply: true
 ---
-
 ## 📱 Android — Always
 
 - `PROVIDER_GOOGLE` on every `<MapView>`. No exceptions.

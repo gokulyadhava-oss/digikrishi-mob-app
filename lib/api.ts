@@ -37,11 +37,11 @@ export async function api<T>(
     const err = e as Error & { name?: string };
     const msg =
       err.name === 'AbortError'
-        ? 'Request timed out. Check: (1) Backend is running, (2) Device and server on same network if using IP, (3) Firewall allows the port.'
+        ? 'Request timed out. Is the backend running?'
         : err.message || 'Network error';
     const hint =
-      url.includes('localhost') || url.includes('127.0.0.1')
-        ? ' On a physical device, use your computer IP (e.g. http://192.168.x.x:3001/api) in .env'
+      url.includes('localhost') || url.includes('127.0.0.1') || url.match(/192\.168\.\d+\.\d+/)
+        ? ' On a physical iPhone: set EXPO_PUBLIC_API_URL in .env to your computer\'s IP (e.g. http://192.168.1.5:8080). iPhone and computer must be on the same Wi‑Fi.'
         : '';
     throw new Error(`${msg}${hint}`);
   }
@@ -54,7 +54,13 @@ export async function api<T>(
     err.status = res.status;
     throw err;
   }
-  return res.json();
+  const text = await res.text();
+  if (!text || !text.trim()) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return {} as T;
+  }
 }
 
 export async function login(email: string, password: string, roleHint: 'FARMER' | 'FIELD_OFFICER') {
@@ -68,12 +74,34 @@ export async function login(email: string, password: string, roleHint: 'FARMER' 
   return data;
 }
 
+export async function requestFarmerOtp(mobile: string) {
+  return api<{ ok: boolean }>('/auth/farmer/request-otp', {
+    method: 'POST',
+    body: JSON.stringify({ mobile }),
+  });
+}
+
+export async function verifyFarmerOtp(mobile: string, otp: string) {
+  return api<{ token: string; user: { id: string; email: string | null; role: string; tenant_id: string | null } }>(
+    '/auth/farmer/verify-otp',
+    {
+      method: 'POST',
+      body: JSON.stringify({ mobile, otp }),
+    }
+  );
+}
+
 export async function fetchMe() {
   return api<{ user: { id: string; email: string; role: string; tenant_id: string | null; Tenant?: { name: string } } }>('/auth/me');
 }
 
 export async function fetchMyFarmer() {
   return api<FarmerProfile>('/auth/me/farmer');
+}
+
+/** Logged-in farmer: get signed URL for own profile picture. */
+export async function fetchMyProfileDownloadUrl() {
+  return api<{ url: string }>('/auth/me/profile/download-url');
 }
 
 export async function fetchMyAssignedFarmers() {
@@ -93,13 +121,15 @@ export interface FarmerProfile {
   farmer_code: string;
   name: string;
   mobile?: string | null;
-  gender: string | null;
-  dob: string | null;
-  education: string | null;
-  kyc_status: string;
+  gender?: string | null;
+  dob?: string | null;
+  education?: string | null;
+  kyc_status?: string;
   profile_pic_url?: string | null;
   FarmerAddress?: { village?: string; taluka?: string; district?: string; state?: string } | null;
   FarmerProfileDetail?: FarmerProfileDetails | null;
+  FarmerBank?: FarmerBank | null;
+  FarmerDoc?: FarmerDoc | null;
   FarmerAgentMaps?: Array<{ Agent?: { id: string; email: string | null; mobile: string | null } }>;
 }
 
@@ -345,6 +375,70 @@ export const PLOT_VARIETY = [
 
 export async function fetchPlots(farmerId: string) {
   return api<FarmerPlotRecord[]>(`/farmers/${farmerId}/plots`);
+}
+
+/** Logged-in farmer: fetch only plots for this farmer (agent-added or self). */
+export async function fetchMyPlots() {
+  return api<FarmerPlotRecord[]>('/auth/me/plots');
+}
+
+/** Logged-in farmer: create a plot for self. */
+export async function createMyPlot(payload: FarmerPlotPayload) {
+  return api<FarmerPlotRecord>('/auth/me/plots', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Logged-in farmer: get one own plot. */
+export async function getMyPlot(plotId: string) {
+  return api<FarmerPlotRecord>(`/auth/me/plots/${plotId}`);
+}
+
+/** Logged-in farmer: update own plot. */
+export async function updateMyPlot(plotId: string, payload: FarmerPlotPayload) {
+  return api<FarmerPlotRecord>(`/auth/me/plots/${plotId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Logged-in farmer: delete own plot. */
+export async function deleteMyPlot(plotId: string) {
+  return api<{ message: string }>(`/auth/me/plots/${plotId}`, { method: 'DELETE' });
+}
+
+/** Crop advisory row returned by advisories API. */
+export interface CropAdvisoryRecord {
+  id: string;
+  stage_name: string;
+  activity: string;
+  activity_type: string | null;
+  activity_code: string | null;
+  activity_time: string | null;
+  start_day: number | null;
+  end_day: number | null;
+  specifications: Record<string, unknown> | null;
+  steps: unknown[] | null;
+  /** 1-based step order from API (current period). */
+  step_index?: number;
+  /** True if days_since_sowing falls in [start_day, end_day]. */
+  is_current_period?: boolean;
+}
+
+export interface PlotAdvisoriesResponse {
+  days_since_sowing: number | null;
+  advisories: CropAdvisoryRecord[];
+}
+
+/** Logged-in farmer: fetch advisories for one of their plots. */
+export async function fetchMyPlotAdvisories(plotId: string) {
+  return api<PlotAdvisoriesResponse>(`/auth/me/plots/${plotId}/advisories`);
+}
+
+/** Agent: fetch advisories for a farmer's plot. */
+export async function fetchPlotAdvisories(farmerId: string, plotId: string) {
+  return api<PlotAdvisoriesResponse>(`/farmers/${farmerId}/plots/${plotId}/advisories`);
 }
 
 export async function getPlot(farmerId: string, plotId: string) {

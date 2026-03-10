@@ -1,128 +1,42 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
-  Pressable,
-  Platform,
+  ScrollView,
   ActivityIndicator,
-  Alert,
-  Animated,
+  Platform,
+  RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, Polygon, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import * as Location from 'expo-location';
-import { LinearGradient } from 'expo-linear-gradient';
-import area from '@turf/area';
-import { polygon as turfPolygon } from '@turf/helpers';
-import { fetchPlotMaps, trackPlotMap, createPlotMap, getPlot, updatePlot, type PlotMapRecord } from '@/lib/api';
-import { reverseGeocode } from '@/lib/google-places';
-import { GpsKalmanFilter } from '@/utils/gpsKalmanFilter';
+import MapView, { Polygon, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useAuth } from '@/contexts/auth-context';
+import {
+  fetchPlotMaps,
+  fetchMyPlotAdvisories,
+  fetchPlotAdvisories,
+  type PlotMapRecord,
+  type PlotAdvisoriesResponse,
+  type CropAdvisoryRecord,
+} from '@/lib/api';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { FARM_MAP_STYLE } from '@/constants/map-style';
 
 const SHEET_BG = '#0A0C0F';
 const GREEN = '#22C55E';
-const GREEN_DARK = '#16A34A';
 const EMERALD_BORDER = '#10b981';
 const GRAY = '#6B7280';
 const GRAY_LIGHT = '#9CA3AF';
 const WHITE = '#F9FAFB';
-const RED = '#EF4444';
-const GOLD = '#FFD700';
-const SEND_INTERVAL = 5;
 const DEFAULT_REGION = { latitude: 20.5937, longitude: 78.9629, latitudeDelta: 0.01, longitudeDelta: 0.01 };
 
-function BottomSheet({ children }: { children: React.ReactNode }) {
-  return (
-    <LinearGradient colors={['rgba(10,12,15,0.97)', SHEET_BG]} style={styles.bottomSheet}>
-      <View style={styles.dragHandle} />
-      {children}
-    </LinearGradient>
-  );
-}
-
-function StatPill({ label, value, accent }: { label: string; value: string; accent?: string }) {
-  return (
-    <View style={styles.statPill}>
-      <Text style={[styles.statPillLabel, accent ? { color: accent } : undefined]}>{label}</Text>
-      <Text style={styles.statPillValue}>{value}</Text>
-    </View>
-  );
-}
-
-function DrawPointIndicator({ nextPoint }: { nextPoint: number }) {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    if (nextPoint > 4) return;
-    pulseAnim.setValue(1);
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.35, duration: 600, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [nextPoint, pulseAnim]);
-
-  return (
-    <View style={styles.drawPointRow}>
-      <Text style={styles.drawPointLabel}>Next: </Text>
-      {[1, 2, 3, 4].map((n) => {
-        const isNext = n === nextPoint;
-        const placed = n < nextPoint;
-        const content = (
-          <View style={[styles.drawPointPill, placed && styles.drawPointPillPlaced, isNext && styles.drawPointPillNext]}>
-            <Text style={[styles.drawPointPillText, (placed || isNext) && { color: WHITE }]}>{n}</Text>
-          </View>
-        );
-        if (isNext) {
-          return (
-            <Animated.View key={n} style={[{ transform: [{ scale: pulseAnim }] }]}>
-              {content}
-            </Animated.View>
-          );
-        }
-        return <View key={n}>{content}</View>;
-      })}
-    </View>
-  );
-}
-
-function getAreaFromPath(path: { latitude: number; longitude: number }[]) {
-  if (path.length < 3) return { area_m2: 0, area_acres: 0, area_hectares: 0 };
-  const ring = [...path];
-  if (ring[0].latitude !== ring[ring.length - 1].latitude || ring[0].longitude !== ring[ring.length - 1].longitude) {
-    ring.push(ring[0]);
-  }
-  const coords = ring.map((p) => [p.longitude, p.latitude]);
-  const poly = turfPolygon([coords]);
-  const area_m2 = area(poly);
-  const area_acres = area_m2 / 4046.86;
-  const area_hectares = area_m2 / 10000;
-  return { area_m2, area_acres, area_hectares };
-}
-
-/** Compute map region (center + deltas) from coordinates with padding. Reliable on Android vs fitToCoordinates. */
 function regionFromCoordinates(
   coords: { latitude: number; longitude: number }[],
-  paddingFactor = 1.5
+  paddingFactor = 1.6
 ): { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } {
-  if (coords.length === 0) {
-    return { ...DEFAULT_REGION };
-  }
-  if (coords.length === 1) {
-    return {
-      latitude: coords[0].latitude,
-      longitude: coords[0].longitude,
-      latitudeDelta: 0.002,
-      longitudeDelta: 0.002,
-    };
-  }
+  if (coords.length === 0) return { ...DEFAULT_REGION };
   const lats = coords.map((c) => c.latitude);
   const lngs = coords.map((c) => c.longitude);
   const minLat = Math.min(...lats);
@@ -139,7 +53,56 @@ function regionFromCoordinates(
   };
 }
 
-export default function PlotMapScreen() {
+function formatStep(step: unknown, index: number): string {
+  if (step == null) return `${index + 1}. —`;
+  if (typeof step === 'string') return `${index + 1}. ${step}`;
+  if (typeof step === 'object' && step !== null && 'step' in (step as object)) {
+    return `${index + 1}. ${(step as { step?: string }).step ?? String(step)}`;
+  }
+  return `${index + 1}. ${JSON.stringify(step)}`;
+}
+
+function formatSpecLabel(key: string): string {
+  const k = (key || '').trim();
+  if (!k) return 'Details';
+  if (k.toLowerCase() === 'text') return 'Details';
+  if (/^\d+$/.test(k)) return `Point ${k}`;
+  return k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ');
+}
+
+function splitIntoParagraphs(value: string): string[] {
+  if (!value || !value.trim()) return [];
+  return value
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
+/** Normalize steps from API: can be array of items or object like { text: "1. ...\n2. ..." }. */
+function getStepsList(steps: unknown): string[] {
+  if (Array.isArray(steps)) {
+    return steps.map((s) => {
+      if (s == null) return '';
+      if (typeof s === 'string') return s;
+      if (typeof s === 'object' && s !== null && 'step' in (s as object))
+        return (s as { step?: string }).step ?? String(s);
+      return String(s);
+    });
+  }
+  if (steps && typeof steps === 'object' && !Array.isArray(steps)) {
+    const obj = steps as Record<string, unknown>;
+    const text = (obj.text ?? obj.steps ?? obj.content ?? '').toString().trim();
+    if (!text) return [];
+    return splitIntoParagraphs(text);
+  }
+  if (typeof steps === 'string' && steps.trim()) {
+    return splitIntoParagraphs(steps);
+  }
+  return [];
+}
+
+export default function PlotViewScreen() {
+  const { user } = useAuth();
   const { id: plotId, farmerId, plotTitle = 'Plot', plotMeta = '' } = useLocalSearchParams<{
     id: string;
     farmerId?: string;
@@ -147,624 +110,433 @@ export default function PlotMapScreen() {
     plotMeta?: string;
   }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const [activeTab, setActiveTab] = useState<'measure' | 'farms'>('measure');
-  const [mode, setMode] = useState<'idle' | 'walking' | 'drawing' | 'done' | 'saved'>('idle');
-  const [path, setPath] = useState<{ latitude: number; longitude: number; accuracy?: number; timestamp?: number }[]>([]);
+
   const [savedMaps, setSavedMaps] = useState<PlotMapRecord[]>([]);
   const [savedMapsLoading, setSavedMapsLoading] = useState(false);
-  const [accuracy, setAccuracy] = useState<number>(0);
-  const [countdown, setCountdown] = useState(SEND_INTERVAL);
-  const [pointsSent, setPointsSent] = useState(0);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [farmName, setFarmName] = useState('');
-  const [saveLoading, setSaveLoading] = useState(false);
-  const [initialLocationSet, setInitialLocationSet] = useState(false);
-  const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
-  const computedArea = path.length >= 3 ? getAreaFromPath(path.map((p) => ({ latitude: p.latitude, longitude: p.longitude }))) : null;
+  const [advisoriesData, setAdvisoriesData] = useState<PlotAdvisoriesResponse | null>(null);
+  const [advisoriesLoading, setAdvisoriesLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const locationSubRef = useRef<Location.LocationSubscription | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastSentIdxRef = useRef(0);
-  const pathRef = useRef(path);
-  const filterRef = useRef(new GpsKalmanFilter());
-  pathRef.current = path;
-
-  const loadSavedMaps = useCallback(async () => {
+  const loadMaps = useCallback(async () => {
     if (!plotId) return;
     setSavedMapsLoading(true);
     try {
       const list = await fetchPlotMaps(plotId);
       setSavedMaps(list);
-    } catch (e) {
-      // ignore
+    } catch {
+      setSavedMaps([]);
     } finally {
       setSavedMapsLoading(false);
     }
   }, [plotId]);
 
-  useEffect(() => {
-    loadSavedMaps();
-  }, [loadSavedMaps]);
-
-  // Center map on user location on load (so not zoomed out to whole India).
-  useEffect(() => {
-    if (initialLocationSet || !mapRef.current) return;
-    let cancelled = false;
-    (async () => {
-      let { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        const { status: requested } = await Location.requestForegroundPermissionsAsync();
-        if (requested !== 'granted' || cancelled) return;
-        status = requested;
-      }
-      try {
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-          mayShowUserSettingsDialog: true,
-        });
-        if (cancelled || !mapRef.current) return;
-        const { latitude, longitude } = loc.coords;
-        mapRef.current.animateCamera(
-          {
-            center: { latitude, longitude },
-            zoom: 17,
-            heading: 0,
-            pitch: 0,
-          },
-          { duration: 500 }
-        );
-        setAccuracy(Math.round(loc.coords.accuracy ?? 0));
-        setInitialLocationSet(true);
-      } catch (_) {}
-    })();
-    return () => { cancelled = true; };
-  }, [initialLocationSet]);
-
-  // Fit map to path while walking or drawing: first point = center+zoom; 2+ points = fit all with room above sheet.
-  useEffect(() => {
-    if ((mode !== 'walking' && mode !== 'drawing') || path.length === 0 || !mapRef.current) return;
-
-    if (path.length === 1) {
-      mapRef.current.animateCamera(
-        {
-          center: { latitude: path[0].latitude, longitude: path[0].longitude },
-          zoom: 19.5,
-          pitch: 10,
-          heading: 0,
-        },
-        { duration: 600 }
-      );
-      return;
-    }
-
-    if (Platform.OS === 'android') {
-      const region = regionFromCoordinates(
-        path.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
-        1.5
-      );
-      mapRef.current.animateToRegion(region, 600);
-    } else {
-      mapRef.current.fitToCoordinates(
-        path.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
-        { edgePadding: { top: 24, right: 40, bottom: 220, left: 40 }, animated: true }
-      );
-    }
-  }, [mode, path.length, path]);
-
-  const startDrawing = useCallback(() => {
-    setPath([]);
-    setMode('drawing');
-  }, []);
-
-  const handleMapPress = useCallback(
-    (e: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) => {
-      if (mode !== 'drawing' || path.length >= 4) return;
-      const { latitude, longitude } = e.nativeEvent.coordinate;
-      setPath((prev) => [...prev, { latitude, longitude }]);
-    },
-    [mode, path.length]
-  );
-
-  useEffect(() => {
-    if (mode === 'drawing' && path.length === 4) setMode('done');
-  }, [mode, path.length]);
-
-  const removeLastDrawPoint = useCallback(() => {
-    if (mode !== 'drawing' || path.length === 0) return;
-    setPath((prev) => prev.slice(0, -1));
-  }, [mode, path.length]);
-
-  const centerOnMe = useCallback(async () => {
-    if (!mapRef.current) return;
+  const loadAdvisories = useCallback(async () => {
+    if (!plotId) return;
+    const isFarmer = user?.role === 'FARMER';
+    if (!isFarmer && !farmerId) return;
+    setAdvisoriesLoading(true);
     try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        const { status: requested } = await Location.requestForegroundPermissionsAsync();
-        if (requested !== 'granted') {
-          Alert.alert('Permission needed', 'Location is required to centre the map.');
-          return;
-        }
-      }
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-        mayShowUserSettingsDialog: true,
-      });
-      if (!mapRef.current) return;
-      mapRef.current.animateCamera(
-        {
-          center: { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
-          zoom: 18,
-          pitch: 10,
-          heading: 0,
-        },
-        { duration: 500 }
-      );
-      setAccuracy(Math.round(loc.coords.accuracy ?? 0));
-    } catch (_) {
-      Alert.alert('Location unavailable', 'Could not get your position.');
-    }
-  }, []);
-
-  const startWalking = useCallback(async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Location is required to record the boundary.');
-      return;
-    }
-    filterRef.current.reset();
-    setSessionId(`sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
-    setPath([]);
-    setPointsSent(0);
-    setCountdown(SEND_INTERVAL);
-    lastSentIdxRef.current = 0;
-    setMode('walking');
-  }, []);
-
-  useEffect(() => {
-    if (mode !== 'walking') return;
-    const sub = Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.BestForNavigation,
-        distanceInterval: Platform.OS === 'android' ? 0 : 2,
-        timeInterval: 1000, // Android: ensure time-based updates (recommended for Kalman)
-      },
-      (loc) => {
-        const acc = loc.coords.accuracy ?? 99;
-        setAccuracy(Math.round(acc));
-        const smoothed = filterRef.current.process({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-          accuracy: loc.coords.accuracy ?? null,
-          timestamp: Date.now(),
-        });
-        if (smoothed) {
-          setPath((prev) => [...prev, smoothed]);
-        }
-      }
-    );
-    sub.then((subscription) => {
-      locationSubRef.current = subscription;
-    });
-    return () => {
-      locationSubRef.current?.remove();
-      locationSubRef.current = null;
-    };
-  }, [mode]);
-
-  useEffect(() => {
-    if (mode !== 'walking' || !sessionId || !plotId) return;
-    countdownRef.current = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          const currentPath = pathRef.current;
-          const current = currentPath.length;
-          const from = lastSentIdxRef.current;
-          if (current > from && sessionId) {
-            const points = currentPath.slice(from);
-            lastSentIdxRef.current = current;
-            trackPlotMap(plotId, {
-              session_id: sessionId,
-              points: points.map((p) => ({ latitude: p.latitude, longitude: p.longitude, accuracy: p.accuracy, timestamp: p.timestamp })),
-            }).then(() => setPointsSent((s) => s + points.length)).catch(() => {});
-          }
-          return SEND_INTERVAL;
-        }
-        return c - 1;
-      });
-    }, 1000);
-    return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-  }, [mode, sessionId, plotId]);
-
-  const stopWalking = useCallback(() => {
-    locationSubRef.current?.remove();
-    locationSubRef.current = null;
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    setMode('done');
-  }, []);
-
-  const redo = useCallback(() => {
-    setPath([]);
-    setSessionId(null);
-    setCountdown(SEND_INTERVAL);
-    setPointsSent(0);
-    setMode('idle');
-  }, []);
-
-  const viewPlotOnMap = useCallback((m: PlotMapRecord) => {
-    if (!mapRef.current || !m.coordinates?.length) return;
-    const coords = m.coordinates.map((c) => ({ latitude: c.latitude, longitude: c.longitude }));
-
-    if (Platform.OS === 'android') {
-      const region = regionFromCoordinates(coords, 1.6);
-      mapRef.current.animateToRegion(region, 600);
-    } else {
-      mapRef.current.fitToCoordinates(coords, {
-        edgePadding: { top: 60, right: 40, bottom: 260, left: 40 },
-        animated: true,
-      });
-    }
-  }, []);
-
-  const saveMap = useCallback(async () => {
-    if (!plotId || path.length < 3 || !computedArea) return;
-    setSaveLoading(true);
-    const firstLat = path[0].latitude;
-    const firstLng = path[0].longitude;
-    try {
-      const coords = path.map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
-      await createPlotMap({
-        plot_id: plotId,
-        session_id: sessionId ?? undefined,
-        name: (farmName && farmName.trim()) || plotTitle || 'Plot map',
-        coordinates: coords,
-        gps_path: path.length > 0 ? path.map((p) => ({ latitude: p.latitude, longitude: p.longitude })) : undefined,
-        area_m2: computedArea.area_m2,
-        area_acres: computedArea.area_acres,
-        area_hectares: computedArea.area_hectares,
-      });
-      setMode('saved');
-      loadSavedMaps();
-
-      if (farmerId && path.length > 0) {
-        (async () => {
-          try {
-            const plot = await getPlot(farmerId, plotId);
-            const hasAddress = !!(plot.address?.trim() || plot.district?.trim());
-            if (!hasAddress) {
-              const parsed = await reverseGeocode(firstLat, firstLng);
-              await updatePlot(farmerId, plotId, {
-                address: parsed.address || null,
-                pincode: parsed.pincode || null,
-                taluka: parsed.taluka || null,
-                district: parsed.district || null,
-              });
-            }
-          } catch (_) {
-            // ignore backfill failure
-          }
-        })();
-      }
-
-      setTimeout(() => {
-        redo();
-        setActiveTab('farms');
-      }, 2000);
-    } catch (e) {
-      Alert.alert('Save failed', e instanceof Error ? e.message : 'Could not save.');
+      const data = isFarmer
+        ? await fetchMyPlotAdvisories(plotId)
+        : await fetchPlotAdvisories(farmerId!, plotId);
+      setAdvisoriesData(data);
+    } catch {
+      setAdvisoriesData({ days_since_sowing: null, advisories: [] });
     } finally {
-      setSaveLoading(false);
+      setAdvisoriesLoading(false);
     }
-  }, [plotId, farmerId, path, computedArea, sessionId, farmName, plotTitle, loadSavedMaps, redo]);
+  }, [plotId, user?.role, farmerId]);
 
-  const pathCoords = path.map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
-  const closedPath = path.length >= 3 ? [...pathCoords, pathCoords[0]] : pathCoords;
-  const initialRegion = pathCoords.length
-    ? {
-        latitude: pathCoords[0].latitude,
-        longitude: pathCoords[0].longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }
-    : DEFAULT_REGION;
+  useEffect(() => {
+    loadMaps();
+  }, [loadMaps]);
 
-  const gpsBadgeColor = accuracy > 30 ? RED : accuracy > 15 ? '#F59E0B' : GREEN;
-  const insets = useSafeAreaInsets();
+  useEffect(() => {
+    loadAdvisories();
+  }, [loadAdvisories]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([loadMaps(), loadAdvisories()]);
+    setRefreshing(false);
+  }, [loadMaps, loadAdvisories]);
+
+  const firstMap = savedMaps[0];
+  const mapRegion =
+    firstMap?.coordinates?.length >= 2
+      ? regionFromCoordinates(firstMap.coordinates)
+      : DEFAULT_REGION;
+
+  const filteredAdvisories = advisoriesData?.advisories
+    ? (() => {
+        const seen = new Set<string>();
+        return advisoriesData.advisories.filter((a) => {
+          const activityLower = (a.activity || '').toLowerCase();
+          if (
+            activityLower.includes('rate of the yield') ||
+            activityLower.includes('rate of yield') ||
+            activityLower.includes('yield per acre')
+          )
+            return false;
+          const key = `${a.stage_name}|${a.activity}|${a.start_day ?? ''}|${a.end_day ?? ''}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      })()
+    : [];
 
   return (
     <ErrorBoundary
       onRetry={() => router.back()}
       fallback={
         <View style={styles.errorContainer}>
-          <Text style={styles.errorTitle}>Map unavailable</Text>
-          <Text style={styles.errorMessage}>Something went wrong loading the map. Check that location permission is allowed and try again.</Text>
+          <Text style={styles.errorTitle}>Unable to load plot</Text>
           <TouchableOpacity style={styles.errorButton} onPress={() => router.back()}>
             <Text style={styles.errorButtonText}>← Go back</Text>
           </TouchableOpacity>
         </View>
-      }
-    >
-    <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 10), paddingBottom: 8 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <View style={styles.topBarCard}>
-          <Text style={styles.topBarEmoji}>🌾</Text>
-          <View>
-            <Text style={styles.topBarTitle}>Farm Mapper</Text>
-            <Text style={styles.topBarSub}>Walk the boundary</Text>
+      }>
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 10), paddingBottom: 8 }]}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <View style={styles.titleWrap}>
+            <Text style={styles.titleText} numberOfLines={1}>{plotTitle}</Text>
+            {plotMeta ? (
+              <Text style={styles.metaText} numberOfLines={1}>{plotMeta}</Text>
+            ) : null}
           </View>
         </View>
-        <View
-          style={[
-            styles.gpsBadge,
-            {
-              backgroundColor: accuracy > 30 ? 'rgba(239,68,68,0.2)' : accuracy > 15 ? 'rgba(245,158,11,0.2)' : 'rgba(34,197,94,0.15)',
-              borderColor: accuracy > 30 ? 'rgba(239,68,68,0.5)' : accuracy > 15 ? 'rgba(245,158,11,0.5)' : 'rgba(34,197,94,0.4)',
-            },
-          ]}
-        >
-          <View style={[styles.gpsDot, { backgroundColor: gpsBadgeColor }]} />
-          <Text
-            style={[styles.gpsText, { color: accuracy > 30 ? '#FCA5A5' : accuracy > 15 ? '#FCD34D' : '#86EFAC' }]}
-          >
-            GPS ±{accuracy}m
-          </Text>
-        </View>
-      </View>
-      <View style={styles.mapWrapper}>
-        <MapView
-          ref={mapRef}
-          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-          mapType={mapType}
-          customMapStyle={mapType === 'standard' ? (FARM_MAP_STYLE as any) : undefined}
-          showsUserLocation={true}
-          showsMyLocationButton={true}
-          showsBuildings={false}
-          showsTraffic={false}
-          showsIndoors={false}
-          showsPointsOfInterest={false}
-          showsCompass={false}
-          rotateEnabled
-          style={StyleSheet.absoluteFill}
-          initialRegion={initialRegion}
-          onPress={mode === 'drawing' ? handleMapPress : undefined}
-        >
-        {savedMaps.map((m) => (
-          <Polygon
-            key={m.id}
-            coordinates={m.coordinates.length ? [...m.coordinates, m.coordinates[0]] : []}
-            fillColor="rgba(34,197,94,0.2)"
-            strokeColor={GREEN}
-            strokeWidth={2}
-          />
-        ))}
-        {mode === 'walking' && pathCoords.length > 1 && (
-          <Polyline
-            coordinates={pathCoords}
-            strokeColor={GOLD}
-            strokeWidth={4}
-            lineJoin="round"
-            lineCap="round"
-            geodesic={true}
-          />
-        )}
-        {mode === 'walking' && pathCoords.length >= 2 && (
-          <Polyline
-            coordinates={[pathCoords[pathCoords.length - 1], pathCoords[0]]}
-            strokeColor="rgba(255,215,0,0.5)"
-            strokeWidth={2}
-            lineDashPattern={[8, 4]}
-            geodesic={true}
-          />
-        )}
-        {(mode === 'drawing' || mode === 'done' || mode === 'saved') && pathCoords.length >= 1 && pathCoords.map((coord, idx) => (
-          <Marker
-            key={idx}
-            coordinate={coord}
-            pinColor={GREEN}
-            title={`${idx + 1}`}
-          />
-        ))}
-        {mode === 'drawing' && pathCoords.length >= 2 && (
-          <>
-            <Polyline
-              coordinates={pathCoords}
-              strokeColor={GOLD}
-              strokeWidth={4}
-              lineJoin="round"
-              lineCap="round"
-              geodesic={true}
-            />
-            <Polyline
-              coordinates={[pathCoords[pathCoords.length - 1], pathCoords[0]]}
-              strokeColor="rgba(255,215,0,0.8)"
-              strokeWidth={3}
-              lineDashPattern={[10, 6]}
-              lineJoin="round"
-              lineCap="round"
-              geodesic={true}
-            />
-          </>
-        )}
-        {pathCoords.length >= 1 && mode === 'walking' && (
-          <Marker coordinate={pathCoords[0]} pinColor="green" title="Start" />
-        )}
-        {(mode === 'done' || mode === 'saved') && closedPath.length > 2 && (
-          <Polygon coordinates={closedPath} fillColor="rgba(34,197,94,0.22)" strokeColor={GREEN} strokeWidth={3} />
-        )}
-        </MapView>
-        <TouchableOpacity
-          style={styles.mapTypeButton}
-          onPress={() => setMapType((t) => (t === 'standard' ? 'satellite' : 'standard'))}
-          activeOpacity={0.85}
-          accessibilityLabel={mapType === 'standard' ? 'Switch to satellite view' : 'Switch to map view'}
-        >
-          <Text style={styles.mapTypeButtonLabel} numberOfLines={1}>
-            {mapType === 'standard' ? '🛰 Satellite view' : '🗺 Map view'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.centreButton}
-          onPress={centerOnMe}
-          activeOpacity={0.85}
-          accessibilityLabel="Centre map on my location"
-        >
-          <Text style={styles.centreButtonText}>⊙ Centre</Text>
-        </TouchableOpacity>
-      </View>
 
-      <BottomSheet>
-        <View style={styles.tabs}>
-          <Pressable style={[styles.tab, activeTab === 'measure' && styles.tabActive]} onPress={() => setActiveTab('measure')}>
-            <Text style={[styles.tabText, activeTab === 'measure' && styles.tabTextActive]}>📐 Measure</Text>
-          </Pressable>
-          <Pressable style={[styles.tab, activeTab === 'farms' && styles.tabActive]} onPress={() => setActiveTab('farms')}>
-            <Text style={[styles.tabText, activeTab === 'farms' && styles.tabTextActive]}>🗂 My Farms</Text>
-          </Pressable>
-        </View>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GREEN} />
+          }
+          showsVerticalScrollIndicator={false}>
+          {firstMap && firstMap.coordinates?.length >= 2 && (
+            <View style={styles.mapSection}>
+              <Text style={styles.sectionLabel}>View plot</Text>
+              <View style={styles.mapWrapper}>
+                <MapView
+                  ref={mapRef}
+                  provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                  customMapStyle={FARM_MAP_STYLE as any}
+                  style={styles.map}
+                  initialRegion={mapRegion}
+                  scrollEnabled={false}
+                  zoomEnabled={false}
+                  rotateEnabled={false}
+                  pitchEnabled={false}>
+                  <Polygon
+                    coordinates={
+                      firstMap.coordinates.length
+                        ? [...firstMap.coordinates, firstMap.coordinates[0]]
+                        : []
+                    }
+                    fillColor="rgba(34,197,94,0.2)"
+                    strokeColor={GREEN}
+                    strokeWidth={2}
+                  />
+                </MapView>
+              </View>
+              <Text style={styles.mapArea}>
+                {firstMap.area_acres != null
+                  ? `${firstMap.area_acres.toFixed(2)} acres`
+                  : ''}
+              </Text>
+            </View>
+          )}
 
-        {activeTab === 'measure' && (
-          <View style={styles.tabContent}>
-            {mode === 'idle' && (
-              <>
-                <Text style={styles.idleText}>
-                  Walk the boundary or tap Draw to place 4 corners.
-                </Text>
-                <View style={styles.idleButtonRow}>
-                  <TouchableOpacity activeOpacity={0.9} onPress={startWalking} style={styles.primaryButton}>
-                    <LinearGradient colors={[GREEN_DARK, GREEN]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-                    <Text style={styles.primaryButtonText}>🚶 Start Walking</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity activeOpacity={0.9} onPress={startDrawing} style={styles.drawPlotButton}>
-                    <LinearGradient colors={[GREEN_DARK, GREEN]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, styles.drawPlotButtonGradient]} />
-                    <Text style={styles.drawPlotButtonText}>✏️ Draw plot</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
+          <View style={styles.advisoriesSection}>
+            <Text style={styles.sectionLabel}>Advisories</Text>
+            {advisoriesLoading && (
+              <View style={styles.loadingWrap}>
+                <ActivityIndicator size="large" color={GREEN} />
+                <Text style={styles.loadingText}>Loading…</Text>
+              </View>
             )}
-            {mode === 'drawing' && (
+            {!advisoriesLoading && advisoriesData && (
               <>
-                <Text style={styles.drawingText}>
-                  Tap the map to place 4 corners.
-                </Text>
-                <DrawPointIndicator nextPoint={path.length + 1} />
-                {path.length > 0 && (
-                  <TouchableOpacity activeOpacity={0.9} onPress={removeLastDrawPoint} style={styles.secondaryButtonDrawing}>
-                    <Text style={styles.secondaryButtonText}>↩ Remove last point</Text>
-                  </TouchableOpacity>
-                )}
-              </>
-            )}
-            {mode === 'walking' && (
-              <>
-                <View style={styles.statRow}>
-                  <StatPill label="Points" value={String(path.length)} accent={GREEN} />
-                  <StatPill label="Accuracy" value={`±${accuracy}m`} accent={accuracy <= 15 ? GREEN : '#F59E0B'} />
-                </View>
-                <View style={[styles.recordingBar]}>
-                  <View style={[styles.recordingDot, { backgroundColor: RED }]} />
-                  <Text style={styles.recordingText}>Recording boundary • Walk steadily • Next sync in {countdown}s</Text>
-                </View>
-                <TouchableOpacity activeOpacity={0.9} onPress={stopWalking} style={styles.stopButton}>
-                  <LinearGradient colors={['#B91C1C', RED]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, styles.stopButtonGradient]} />
-                  <Text style={styles.primaryButtonText}>⏹ Stop & Calculate Area</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            {mode === 'done' && computedArea && (
-              <>
-                <View style={styles.areaCard}>
-                  <Text style={styles.areaLabel}>Total Farm Area</Text>
-                  <Text style={styles.areaValue}>
-                    {computedArea.area_acres.toFixed(3)}
-                    <Text style={styles.areaUnit}> ac</Text>
-                  </Text>
-                  <Text style={styles.areaMeta}>
-                    {computedArea.area_hectares.toFixed(3)} ha · {Math.round(computedArea.area_m2).toLocaleString()} m²
+                <View style={styles.daysRow}>
+                  <Text style={styles.daysText}>
+                    {advisoriesData.days_since_sowing != null
+                      ? `${advisoriesData.days_since_sowing} days since sowing`
+                      : 'Set sowing date on this plot to see day-based advisories'}
                   </Text>
                 </View>
-                {sessionId ? (
-                  <View style={styles.statRow}>
-                    <StatPill label="Synced pts" value={String(pointsSent)} accent={GREEN} />
+                {filteredAdvisories.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyEmoji}>📋</Text>
+                    <Text style={styles.emptyTitle}>No advisories for this period</Text>
+                    <Text style={styles.emptySub}>
+                      Advisories depend on crop, season, variety and days since sowing.
+                    </Text>
                   </View>
                 ) : (
-                  <View style={styles.statRow}>
-                    <StatPill label="Points" value={String(path.length)} accent={GREEN} />
-                  </View>
+                  <>
+                    {filteredAdvisories.filter((a) => a.is_current_period).map((a) => (
+                      <View key={a.id} style={styles.currentCardWrap}>
+                        <AdvisoryStepperStep
+                          stepNumber={1}
+                          totalSteps={1}
+                          advisory={a}
+                          variant="current"
+                        />
+                      </View>
+                    ))}
+                    <EarlierAdvisoriesAccordion
+                      advisories={filteredAdvisories.filter((a) => !a.is_current_period)}
+                    />
+                  </>
                 )}
-                <View style={[styles.farmNameInput, { borderColor: 'rgba(255,255,255,0.1)' }]}>
-                  <Text style={styles.farmNameEmoji}>🌾</Text>
-                  <TextInput
-                    placeholder="Name this map (optional)"
-                    placeholderTextColor={GRAY_LIGHT}
-                    value={farmName}
-                    onChangeText={setFarmName}
-                    style={styles.farmNameTextInput}
-                  />
-                </View>
-                <View style={styles.buttonRow}>
-                  <TouchableOpacity style={styles.secondaryButton} onPress={redo}>
-                    <Text style={styles.secondaryButtonText}>↩ Redo</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.saveButton} onPress={saveMap} disabled={saveLoading}>
-                    <LinearGradient colors={[GREEN_DARK, GREEN]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, styles.saveButtonGradient]} />
-                    {saveLoading ? <ActivityIndicator color={WHITE} /> : <Text style={styles.primaryButtonText}>💾 Save Map</Text>}
-                  </TouchableOpacity>
-                </View>
               </>
             )}
-            {mode === 'saved' && (
-              <View style={styles.savedContent}>
-                <View style={styles.checkCircle}>
-                  <Text style={styles.checkMark}>✓</Text>
-                </View>
-                <Text style={styles.savedTitle}>Map Saved!</Text>
-                <Text style={styles.savedSub}>Added to this plot</Text>
-              </View>
-            )}
           </View>
-        )}
-
-        {activeTab === 'farms' && (
-          <View style={styles.tabContent}>
-            <Text style={styles.farmsSummary}>
-              {savedMapsLoading ? 'Loading…' : `${savedMaps.length} map(s) · ${savedMaps.reduce((a, m) => a + m.area_acres, 0).toFixed(2)} ac total`}
-            </Text>
-            {savedMaps.length === 0 && !savedMapsLoading && (
-              <View style={styles.farmsEmpty}>
-                <Text style={styles.farmsEmptyEmoji}>🗺️</Text>
-                <Text style={styles.farmsEmptyText}>No maps yet</Text>
-                <Text style={styles.farmsEmptySub}>Measure a boundary to get started.</Text>
-              </View>
-            )}
-            {savedMaps.map((m) => (
-              <View key={m.id} style={styles.farmRow}>
-                <View style={[styles.farmRowIcon, { backgroundColor: `${GREEN}22`, borderColor: `${GREEN}44` }]}>
-                  <Text style={styles.farmIconEmoji}>🌾</Text>
-                </View>
-                <View style={styles.farmInfo}>
-                  <Text style={styles.farmName}>{m.name}</Text>
-                  <Text style={styles.farmMeta}>{m.area_acres.toFixed(2)} acres</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.viewPlotButton}
-                  onPress={() => viewPlotOnMap(m)}
-                  activeOpacity={0.8}
-                  accessibilityLabel="View plot on map"
-                  accessibilityRole="button">
-                  <Text style={styles.viewPlotButtonText}>View plot</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        )}
-      </BottomSheet>
-    </View>
+        </ScrollView>
+      </View>
     </ErrorBoundary>
+  );
+}
+
+function EarlierAdvisoriesAccordion({ advisories }: { advisories: CropAdvisoryRecord[] }) {
+  const byRange = useMemo(() => {
+    const map = new Map<string, CropAdvisoryRecord[]>();
+    for (const a of advisories) {
+      const key =
+        a.start_day != null && a.end_day != null
+          ? `Day ${a.start_day} – ${a.end_day}`
+          : 'General';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(a);
+    }
+    return map;
+  }, [advisories]);
+
+  const rangeLabels = useMemo(
+    () =>
+      Array.from(byRange.keys()).sort((a, b) => {
+        const aNum = byRange.get(a)?.[0]?.start_day ?? -1;
+        const bNum = byRange.get(b)?.[0]?.start_day ?? -1;
+        return bNum - aNum;
+      }),
+    [byRange]
+  );
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const didInit = useRef(false);
+  useEffect(() => {
+    if (!didInit.current && rangeLabels.length > 0) {
+      didInit.current = true;
+      setExpanded(new Set([rangeLabels[0]]));
+    }
+  }, [rangeLabels]);
+
+  const toggle = (label: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  if (advisories.length === 0) return null;
+
+  return (
+    <View style={styles.earlierSection}>
+      <Text style={styles.earlierLabel}>Earlier advisories</Text>
+      <Text style={styles.earlierSub}>Tap a date range to expand</Text>
+      {rangeLabels.map((label) => {
+        const isOpen = expanded.has(label);
+        return (
+          <View key={label} style={styles.earlierRangeGroup}>
+            <TouchableOpacity
+              style={styles.accordionHeader}
+              onPress={() => toggle(label)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.earlierRangeLabel}>{label}</Text>
+              <Text style={styles.accordionChevron}>{isOpen ? '▼' : '▶'}</Text>
+            </TouchableOpacity>
+            {isOpen &&
+              byRange.get(label)!.map((a) => (
+                <AdvisoryPastCard key={a.id} advisory={a} />
+              ))}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function AdvisoryStepperStep({
+  stepNumber,
+  totalSteps,
+  advisory,
+  variant = 'current',
+}: {
+  stepNumber: number;
+  totalSteps: number;
+  advisory: CropAdvisoryRecord;
+  variant?: 'current';
+}) {
+  const isLast = stepNumber === totalSteps;
+  const isCurrent = variant === 'current';
+  const specs = advisory.specifications && typeof advisory.specifications === 'object'
+    ? advisory.specifications
+    : null;
+  const stepsList = getStepsList(advisory.steps);
+  const hasSpecs = specs && Object.keys(specs).length > 0;
+  const hasSteps = stepsList.length > 0;
+
+  const hideStepLabel = isCurrent && totalSteps === 1;
+
+  return (
+    <View style={styles.stepperRow}>
+      {!hideStepLabel && (
+        <View style={styles.stepperLeft}>
+          <View style={styles.stepperCircle}>
+            <Text style={styles.stepperNumber}>{stepNumber}</Text>
+          </View>
+          {!isLast && <View style={styles.stepperLine} />}
+        </View>
+      )}
+      <View style={[styles.stepperCard, hideStepLabel && styles.stepperCardFullWidth]}>
+        <View style={styles.stepperCardInner}>
+          {hideStepLabel && (
+            <View style={styles.currentBadge}>
+              <Text style={styles.currentBadgeText}>Current</Text>
+            </View>
+          )}
+          {!hideStepLabel && (
+            <Text style={styles.stepperStepLabel}>Step {stepNumber}</Text>
+          )}
+          <Text style={styles.cardStage}>{advisory.stage_name}</Text>
+          <Text style={styles.cardActivity}>{advisory.activity}</Text>
+          {(advisory.activity_type || advisory.activity_time) && (
+            <Text style={styles.cardMeta}>
+              {[advisory.activity_type, advisory.activity_time].filter(Boolean).join(' · ')}
+            </Text>
+          )}
+          {advisory.start_day != null && advisory.end_day != null && (
+            <Text style={styles.cardPeriod}>
+              Day {advisory.start_day} – {advisory.end_day}
+            </Text>
+          )}
+
+          {hasSpecs && (
+            <View style={styles.specsBlock}>
+              <Text style={styles.specsTitle}>Specifications</Text>
+              {Object.entries(specs!).map(([key, value], specIndex) => {
+                const label = formatSpecLabel(key);
+                const strVal = String(value ?? '').trim();
+                const paragraphs = splitIntoParagraphs(strVal);
+                const pointNum = specIndex + 1;
+                return (
+                  <View key={key} style={styles.pointRow}>
+                    <Text style={styles.pointNum}>{pointNum}.</Text>
+                    <View style={styles.pointContent}>
+                      <Text style={styles.pointLabel}>{label}</Text>
+                      {paragraphs.length > 0 ? (
+                        paragraphs.map((para, i) => (
+                          <Text key={i} style={styles.pointValue}>
+                            {para}
+                          </Text>
+                        ))
+                      ) : (
+                        <Text style={styles.pointValue}>{strVal || '—'}</Text>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {hasSteps && (
+            <View style={styles.stepsBlock}>
+              <Text style={styles.stepsTitle}>Steps</Text>
+              {stepsList.map((stepText, i) => (
+                <View key={i} style={styles.pointRow}>
+                  <Text style={styles.pointNum}>{i + 1}.</Text>
+                  <Text style={styles.stepPointText}>
+                    {stepText.replace(/^\d+\.\s*/, '').trim() || stepText}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function AdvisoryPastCard({ advisory }: { advisory: CropAdvisoryRecord }) {
+  const specs = advisory.specifications && typeof advisory.specifications === 'object'
+    ? advisory.specifications
+    : null;
+  const stepsList = getStepsList(advisory.steps);
+  const hasSpecs = specs && Object.keys(specs).length > 0;
+  const hasSteps = stepsList.length > 0;
+
+  return (
+    <View style={styles.pastCard}>
+      <Text style={styles.pastCardStage}>{advisory.stage_name}</Text>
+      <Text style={styles.pastCardActivity}>{advisory.activity}</Text>
+      {(advisory.activity_type || advisory.activity_time) && (
+        <Text style={styles.pastCardMeta}>
+          {[advisory.activity_type, advisory.activity_time].filter(Boolean).join(' · ')}
+        </Text>
+      )}
+      {advisory.start_day != null && advisory.end_day != null && (
+        <Text style={styles.pastCardPeriod}>Day {advisory.start_day} – {advisory.end_day}</Text>
+      )}
+      {hasSpecs && (
+        <View style={styles.pastSpecsBlock}>
+          <Text style={styles.pastBlockTitle}>Specifications</Text>
+          {Object.entries(specs!).map(([key, value], specIndex) => {
+            const label = formatSpecLabel(key);
+            const strVal = String(value ?? '').trim();
+            const paragraphs = splitIntoParagraphs(strVal);
+            return (
+              <View key={key} style={styles.pastPointRow}>
+                <Text style={styles.pastPointNum}>{specIndex + 1}.</Text>
+                <View style={styles.pastPointContent}>
+                  <Text style={styles.pastPointLabel}>{label}</Text>
+                  {paragraphs.length > 0
+                    ? paragraphs.map((para, i) => (
+                        <Text key={i} style={styles.pastPointValue}>{para}</Text>
+                      ))
+                    : (
+                        <Text style={styles.pastPointValue}>{strVal || '—'}</Text>
+                      )}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+      {hasSteps && (
+        <View style={styles.pastStepsBlock}>
+          <Text style={styles.pastBlockTitle}>Steps</Text>
+          {stepsList.map((stepText, i) => (
+            <View key={i} style={styles.pastPointRow}>
+              <Text style={styles.pastPointNum}>{i + 1}.</Text>
+              <Text style={styles.pastPointValue}>
+                {stepText.replace(/^\d+\.\s*/, '').trim() || stepText}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -772,15 +544,182 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: SHEET_BG },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    gap: 8,
+    gap: 10,
     backgroundColor: SHEET_BG,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  mapWrapper: { flex: 1 },
+  backButton: { paddingVertical: 6, paddingHorizontal: 4 },
+  backButtonText: { color: WHITE, fontSize: 15, fontWeight: '600' },
+  titleWrap: { flex: 1, minWidth: 0 },
+  titleText: { color: WHITE, fontSize: 16, fontWeight: '700' },
+  metaText: { color: GRAY, fontSize: 12, marginTop: 2 },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 16, paddingBottom: 32 },
+  mapSection: { marginBottom: 20 },
+  sectionLabel: {
+    color: GRAY_LIGHT,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  mapWrapper: {
+    height: 180,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  map: { width: '100%', height: '100%' },
+  mapArea: { color: GRAY, fontSize: 12, marginTop: 6 },
+  advisoriesSection: { marginBottom: 24 },
+  loadingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 32,
+  },
+  loadingText: { color: GRAY_LIGHT, fontSize: 14 },
+  daysRow: { marginBottom: 12 },
+  daysText: { color: '#4ADE80', fontSize: 15, fontWeight: '700' },
+  emptyState: { alignItems: 'center', paddingVertical: 32, paddingHorizontal: 20 },
+  emptyEmoji: { fontSize: 40, marginBottom: 10 },
+  emptyTitle: { color: WHITE, fontSize: 16, fontWeight: '600', marginBottom: 4 },
+  emptySub: { color: GRAY, fontSize: 13, textAlign: 'center' },
+  stepperList: { paddingLeft: 4 },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  stepperLeft: {
+    width: 32,
+    alignItems: 'center',
+  },
+  stepperCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: GREEN,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepperNumber: {
+    color: SHEET_BG,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  stepperLine: {
+    width: 2,
+    flex: 1,
+    minHeight: 20,
+    marginTop: 6,
+    backgroundColor: 'rgba(34,197,94,0.5)',
+    borderRadius: 1,
+  },
+  stepperCard: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 12,
+    marginBottom: 8,
+  },
+  stepperCardFullWidth: { marginLeft: 0 },
+  stepperCardInner: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    padding: 16,
+  },
+  stepperStepLabel: {
+    color: GRAY_LIGHT,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  cardStage: { color: GREEN, fontSize: 11, fontWeight: '700', letterSpacing: 0.3, marginBottom: 6 },
+  cardActivity: { color: WHITE, fontSize: 15, fontWeight: '600', marginBottom: 6 },
+  cardMeta: { color: GRAY, fontSize: 12, marginBottom: 4 },
+  cardPeriod: { color: GRAY_LIGHT, fontSize: 11, marginBottom: 12 },
+  specsBlock: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
+  specsTitle: { color: GRAY_LIGHT, fontSize: 11, fontWeight: '700', marginBottom: 10 },
+  pointRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+    gap: 8,
+  },
+  pointNum: {
+    color: GREEN,
+    fontSize: 13,
+    fontWeight: '700',
+    minWidth: 20,
+  },
+  pointContent: { flex: 1, minWidth: 0 },
+  pointLabel: { color: GRAY, fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  pointValue: { color: WHITE, fontSize: 13, lineHeight: 22, marginBottom: 6 },
+  stepsBlock: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
+  stepsTitle: { color: GRAY_LIGHT, fontSize: 11, fontWeight: '700', marginBottom: 10 },
+  stepPointText: { color: WHITE, fontSize: 13, lineHeight: 22, flex: 1 },
+  currentCardWrap: { marginBottom: 20, paddingLeft: 4 },
+  currentBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: GREEN,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  currentBadgeText: { color: SHEET_BG, fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
+  earlierSection: { marginTop: 8, paddingTop: 20, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
+  earlierLabel: { color: GRAY_LIGHT, fontSize: 12, fontWeight: '700', letterSpacing: 0.3, marginBottom: 4 },
+  earlierSub: { color: GRAY, fontSize: 11, marginBottom: 14 },
+  earlierRangeGroup: { marginBottom: 16 },
+  accordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  earlierRangeLabel: {
+    color: GRAY_LIGHT,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  accordionChevron: { color: GRAY_LIGHT, fontSize: 10, fontWeight: '700' },
+  pastCard: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+  },
+  pastCardStage: { color: '#9ca3af', fontSize: 11, fontWeight: '700', letterSpacing: 0.3, marginBottom: 4 },
+  pastCardActivity: { color: '#d1d5db', fontSize: 14, fontWeight: '600', marginBottom: 4 },
+  pastCardMeta: { color: '#6b7280', fontSize: 11, marginBottom: 2 },
+  pastCardPeriod: { color: '#6b7280', fontSize: 10, marginBottom: 10 },
+  pastSpecsBlock: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },
+  pastStepsBlock: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },
+  pastBlockTitle: { color: '#6b7280', fontSize: 10, fontWeight: '700', marginBottom: 8 },
+  pastPointRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 6 },
+  pastPointNum: { color: '#9ca3af', fontSize: 12, fontWeight: '700', minWidth: 18 },
+  pastPointContent: { flex: 1, minWidth: 0 },
+  pastPointLabel: { color: '#9ca3af', fontSize: 11, fontWeight: '600', marginBottom: 2 },
+  pastPointValue: { color: '#d1d5db', fontSize: 12, lineHeight: 20 },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -788,185 +727,7 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: SHEET_BG,
   },
-  errorTitle: { color: WHITE, fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  errorMessage: { color: GRAY_LIGHT, fontSize: 14, textAlign: 'center', marginBottom: 24 },
+  errorTitle: { color: WHITE, fontSize: 18, fontWeight: '700', marginBottom: 16 },
   errorButton: { paddingVertical: 12, paddingHorizontal: 24, backgroundColor: GREEN, borderRadius: 12 },
   errorButtonText: { color: WHITE, fontSize: 16, fontWeight: '600' },
-  mapTypeButton: {
-    position: 'absolute',
-    left: 16,
-    bottom: 240,
-    backgroundColor: 'rgba(10,12,15,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  mapTypeButtonLabel: {
-    color: WHITE,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  centreButton: {
-    position: 'absolute',
-    right: 16,
-    bottom: 240,
-    backgroundColor: 'rgba(10,12,15,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  centreButtonText: { color: WHITE, fontSize: 14, fontWeight: '600' },
-  backButton: { paddingVertical: 6, paddingHorizontal: 4 },
-  backButtonText: { color: 'white', fontSize: 15, fontWeight: '600' },
-  topBarCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(10,12,15,0.85)',
-    borderRadius: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: EMERALD_BORDER,
-  },
-  topBarEmoji: { fontSize: 16 },
-  topBarTitle: { color: 'white', fontSize: 14, fontWeight: '700' },
-  topBarSub: { color: GRAY, fontSize: 11 },
-  gpsBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1 },
-  gpsDot: { width: 7, height: 7, borderRadius: 4 },
-  gpsText: { color: '#86EFAC', fontSize: 12, fontWeight: '600' },
-  bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.6,
-    shadowRadius: 40,
-    elevation: 24,
-  },
-  dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', alignSelf: 'center', marginBottom: 10 },
-  tabs: { flexDirection: 'row', gap: 4, marginBottom: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
-  tab: { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 9 },
-  tabActive: { backgroundColor: 'rgba(255,255,255,0.1)' },
-  tabText: { color: GRAY, fontSize: 13, fontWeight: '600' },
-  tabTextActive: { color: 'white' },
-  tabContent: { minHeight: 80 },
-  idleText: { color: GRAY_LIGHT, fontSize: 14, textAlign: 'center', marginBottom: 14, lineHeight: 22 },
-  idleButtonRow: { flexDirection: 'row', gap: 10, alignItems: 'stretch' },
-  primaryButton: { flex: 1, height: 50, borderRadius: 16, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  drawPlotButton: {
-    minWidth: 128,
-    height: 50,
-    borderRadius: 16,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  drawPlotButtonGradient: { borderRadius: 16 },
-  drawPlotButtonText: { color: WHITE, fontSize: 15, fontWeight: '700' },
-  drawingText: { color: GRAY_LIGHT, fontSize: 14, textAlign: 'center', marginBottom: 12, lineHeight: 22 },
-  drawPointRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 12 },
-  drawPointLabel: { color: GRAY_LIGHT, fontSize: 14, fontWeight: '600' },
-  drawPointPill: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  drawPointPillPlaced: { backgroundColor: `${GREEN}99`, borderColor: GREEN },
-  drawPointPillNext: { backgroundColor: GREEN, borderColor: WHITE },
-  drawPointPillText: { color: GRAY_LIGHT, fontSize: 18, fontWeight: '800' },
-  secondaryButtonDrawing: { paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 14, alignItems: 'center', marginBottom: 8 },
-  primaryButtonText: { color: 'white', fontSize: 17, fontWeight: '700' },
-  statRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  statPill: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-  },
-  statPillLabel: { color: GRAY, fontSize: 11, fontWeight: '600', marginBottom: 2 },
-  statPillValue: { color: WHITE, fontSize: 14, fontWeight: '700' },
-  recordingBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', borderRadius: 10, paddingVertical: 7, paddingHorizontal: 12 },
-  recordingDot: { width: 8, height: 8, borderRadius: 4 },
-  recordingText: { color: '#FCA5A5', fontSize: 12, fontWeight: '600' },
-  stopButton: { height: 50, borderRadius: 16, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  stopButtonGradient: { borderRadius: 16 },
-  areaCard: {
-    backgroundColor: 'rgba(34,197,94,0.08)',
-    borderWidth: 1,
-    borderColor: EMERALD_BORDER,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    marginBottom: 10,
-    alignItems: 'center',
-  },
-  areaLabel: { color: '#4ADE80', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  areaValue: { color: WHITE, fontSize: 38, fontWeight: '800' },
-  areaUnit: { fontSize: 18, color: GRAY, fontWeight: '500', marginLeft: 4 },
-  areaMeta: { color: GRAY, fontSize: 13, marginTop: 4 },
-  farmNameInput: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 10 },
-  farmNameEmoji: { fontSize: 16 },
-  farmNameTextInput: { flex: 1, color: WHITE, fontSize: 15, padding: 0 },
-  buttonRow: { flexDirection: 'row', gap: 8 },
-  secondaryButton: { flex: 1, paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 14, alignItems: 'center' },
-  secondaryButtonText: { color: GRAY_LIGHT, fontSize: 14, fontWeight: '600' },
-  saveButton: { flex: 2, height: 48, borderRadius: 14, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  saveButtonGradient: { borderRadius: 14 },
-  savedContent: { alignItems: 'center', paddingVertical: 14 },
-  checkCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: GREEN, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-  checkMark: { color: 'white', fontSize: 26 },
-  savedTitle: { color: 'white', fontSize: 17, fontWeight: '700', marginBottom: 2 },
-  savedSub: { color: GRAY, fontSize: 13 },
-  farmsSummary: { color: GRAY, fontSize: 12, fontWeight: '600', marginBottom: 8 },
-  farmsEmpty: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 20 },
-  farmsEmptyEmoji: { fontSize: 36, marginBottom: 8 },
-  farmsEmptyText: { color: WHITE, fontSize: 15, fontWeight: '600', marginBottom: 2 },
-  farmsEmptySub: { color: GRAY, fontSize: 13 },
-  farmRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: EMERALD_BORDER, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 6 },
-  farmRowIcon: { width: 36, height: 36, borderRadius: 10, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  farmIconEmoji: { fontSize: 16 },
-  farmInfo: { flex: 1, marginLeft: 12, minWidth: 0 },
-  farmName: { color: 'white', fontSize: 14, fontWeight: '600' },
-  farmMeta: { color: GRAY, fontSize: 12 },
-  viewPlotButton: {
-    marginLeft: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: `${GREEN}30`,
-    borderWidth: 1,
-    borderColor: `${GREEN}66`,
-  },
-  viewPlotButtonText: { color: GREEN, fontSize: 13, fontWeight: '600' },
 });

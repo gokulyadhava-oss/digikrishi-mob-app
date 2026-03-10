@@ -186,24 +186,12 @@ export default function FarmerDetailScreen() {
     ]);
   };
 
-  const handleReuploadProfile = async () => {
+  const uploadProfileImageFromUri = async (uri: string) => {
     if (!id) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow access to photos to choose a picture.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets[0]) return;
     setProfileActionLoading(true);
     try {
       const res = await uploadProfileImage(id, {
-        uri: result.assets[0].uri,
+        uri,
         type: 'image/jpeg',
         name: 'profile.jpg',
       }, true);
@@ -215,6 +203,46 @@ export default function FarmerDetailScreen() {
     } finally {
       setProfileActionLoading(false);
     }
+  };
+
+  const handleReuploadProfile = () => {
+    if (!id) return;
+    Alert.alert('Profile picture', 'Choose source', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Gallery',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Allow access to photos to choose a picture.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets[0]) await uploadProfileImageFromUri(result.assets[0].uri);
+        },
+      },
+      {
+        text: 'Camera',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Allow access to the camera to take a picture.');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets[0]) await uploadProfileImageFromUri(result.assets[0].uri);
+        },
+      },
+    ]);
   };
 
   const hasDoc = (docType: string): boolean => {
@@ -369,7 +397,7 @@ export default function FarmerDetailScreen() {
                     styles.profilePlaceholder,
                     { backgroundColor: colors.muted },
                   ]}>
-                  <IconSymbol name="person.fill" size={80} color={colors.background} />
+                  <IconSymbol name="person.fill" size={48} color={colors.background} />
                 </View>
               )}
               {profileActionLoading ? (
@@ -378,7 +406,7 @@ export default function FarmerDetailScreen() {
                 </View>
               ) : (
                 <View style={styles.profileArrowOverlay}>
-                  <IconSymbol name="arrow.up.circle.fill" size={36} color="rgba(255,255,255,0.95)" />
+                  <IconSymbol name="arrow.up.circle.fill" size={28} color="rgba(255,255,255,0.95)" />
                 </View>
               )}
             </TouchableOpacity>
@@ -391,7 +419,7 @@ export default function FarmerDetailScreen() {
               top: 3,
               bottom: 3,
               left: 3,
-              borderRadius: 11,
+              borderRadius: 9,
               backgroundColor: colors.card,
               transform: [{ translateX: tabAnim }],
               shadowColor: '#000',
@@ -404,12 +432,12 @@ export default function FarmerDetailScreen() {
           {tabs.map(({ key, label }, index) => (
             <TouchableOpacity
               key={key}
-              style={{ flex: 1, paddingVertical: 10, alignItems: 'center' }}
+              style={{ flex: 1, paddingVertical: 8, alignItems: 'center' }}
               onPress={() => handleTabPress(key, index)}
               activeOpacity={0.7}>
               <ThemedText
                 style={{
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: activeTab === key ? '700' : '400',
                   color: colors.text,
                   opacity: activeTab === key ? 1 : 0.88,
@@ -421,7 +449,7 @@ export default function FarmerDetailScreen() {
         </View>
 
         {activeTab === 'basics' && (
-          <View style={{ width: '100%', gap: 10, marginTop: 12 }}>
+          <View style={{ width: '100%', gap: 8, marginTop: 8 }}>
             <InfoCard title="Personal" icon="person.fill" colors={colors}>
               <Row label="Farmer Code" value={farmer.farmer_code ?? '—'} colors={colors} />
               <Row label="Name" value={farmer.name ?? '—'} colors={colors} />
@@ -457,7 +485,7 @@ export default function FarmerDetailScreen() {
         )}
 
         {activeTab === 'documents' && (
-          <View style={{ width: '100%', marginTop: 12 }}>
+          <View style={{ width: '100%', marginTop: 8 }}>
             <InfoCard title="Documents" icon="doc.fill" colors={colors}>
               {DOC_TYPES.map((docType, idx) => {
                 const has = hasDoc(docType);
@@ -532,7 +560,7 @@ export default function FarmerDetailScreen() {
         )}
 
         {activeTab === 'plot' && (
-          <View style={[styles.plotTab, { marginTop: 12 }]}>
+          <View style={[styles.plotTab, { marginTop: 8 }]}>
             {plotsLoading ? (
               <ActivityIndicator size="large" color={colors.primary} style={styles.plotLoader} />
             ) : plots.length === 0 ? (
@@ -540,7 +568,7 @@ export default function FarmerDetailScreen() {
                 style={[styles.addPlotCard, { borderColor: colors.primary, backgroundColor: colors.card }]}
                 onPress={() => setPlotFormVisible(true)}
                 activeOpacity={0.8}>
-                <IconSymbol name="plus.circle.fill" size={56} color={colors.text} />
+                <IconSymbol name="plus.circle.fill" size={40} color={colors.text} />
                 <ThemedText type="subtitle" style={[styles.addPlotTitle, { color: colors.text }]}>Add Plot</ThemedText>
                 <ThemedText style={[styles.addPlotSub, { color: colors.text, opacity: 0.9 }]}>
                   Tap to add season, variety, land & address
@@ -552,7 +580,7 @@ export default function FarmerDetailScreen() {
                   style={[styles.addPlotCardSmall, { borderColor: colors.primary }]}
                   onPress={() => setPlotFormVisible(true)}
                   activeOpacity={0.8}>
-                  <IconSymbol name="plus.circle.fill" size={32} color={colors.text} />
+                  <IconSymbol name="plus.circle.fill" size={24} color={colors.text} />
                   <ThemedText style={[styles.addPlotTitleSmall, { color: colors.text }]}>Add another plot</ThemedText>
                 </TouchableOpacity>
                 {plots.map((plot) => {
@@ -561,13 +589,6 @@ export default function FarmerDetailScreen() {
                   const goToPlot = () => router.push({ pathname: '/plot/[id]', params: { id: plot.id, farmerId: String(id), plotTitle, plotMeta } });
                   return (
                     <View key={plot.id} style={[styles.plotCard, { borderColor: colors.emeraldBorder ?? colors.cardBorder ?? colors.border }]}>
-                      <TouchableOpacity activeOpacity={0.9} onPress={goToPlot}>
-                        <Image
-                          source={{ uri: 'https://568a6n8a8z.ucarecd.net/53e42c26-a358-4ae0-bfec-75f3b96e13a4/-/preview/1000x666/' }}
-                          style={styles.plotCardCover}
-                          resizeMode="cover"
-                        />
-                      </TouchableOpacity>
                       <View style={styles.plotCardContent}>
                         <TouchableOpacity style={styles.plotCardBodyTouch} activeOpacity={0.9} onPress={goToPlot}>
                           <View style={styles.plotCardBody}>
@@ -673,7 +694,7 @@ function InfoCard({
     <View
       style={{
         backgroundColor: colors.card,
-        borderRadius: 16,
+        borderRadius: 12,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: cardBorderColor,
@@ -685,23 +706,23 @@ function InfoCard({
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 8,
-          paddingHorizontal: 16,
-          paddingVertical: 12,
+          gap: 6,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
         }}>
-        <IconSymbol name={icon} size={14} color={headerIcon} />
+        <IconSymbol name={icon} size={12} color={headerIcon} />
         <ThemedText
           style={{
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: '700',
-            letterSpacing: 0.6,
+            letterSpacing: 0.5,
             textTransform: 'uppercase',
             color: headerText,
           }}>
           {title}
         </ThemedText>
       </LinearGradient>
-      <View style={{ paddingHorizontal: 12, paddingVertical: 4 }}>{children}</View>
+      <View style={{ paddingHorizontal: 10, paddingVertical: 2 }}>{children}</View>
     </View>
   );
 }
@@ -716,25 +737,25 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1 },
   scrollContent: {
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 40,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 32,
     alignItems: 'center',
   },
   baseCard: {
     width: '100%',
   },
   baseCardInner: {
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   tabBar: {
     flexDirection: 'row',
     width: '100%',
-    marginTop: 12,
+    marginTop: 8,
     padding: 3,
-    height: 44,
+    height: 38,
   },
   placeholderText: {
     fontSize: 14,
@@ -750,112 +771,109 @@ const styles = StyleSheet.create({
   },
   addPlotCard: {
     width: '100%',
-    minHeight: 180,
-    borderRadius: 16,
+    minHeight: 120,
+    borderRadius: 12,
     borderWidth: 2,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 16,
   },
   addPlotTitle: {
-    marginTop: 12,
+    marginTop: 8,
+    fontSize: 15,
   },
   addPlotSub: {
-    fontSize: 13,
-    marginTop: 4,
+    fontSize: 12,
+    marginTop: 2,
     textAlign: 'center',
   },
   addPlotCardSmall: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
     borderWidth: 1,
     borderStyle: 'dashed',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   addPlotTitleSmall: {
-    fontSize: 15,
+    fontSize: 13,
   },
   plotCard: {
     width: '100%',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 12,
+    marginBottom: 8,
     overflow: 'hidden',
   },
-  plotCardCover: {
-    width: '100%',
-    height: 100,
-    backgroundColor: '#e5e5e5',
-  },
   plotCardContent: {
-    padding: 12,
+    padding: 10,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 10,
   },
   plotCardBodyTouch: {
     flex: 1,
     minWidth: 0,
   },
   plotCardBody: {
-    gap: 4,
+    gap: 2,
   },
   plotCardTitle: {
-    fontSize: 16,
+    fontSize: 14,
   },
   plotCardMeta: {
-    fontSize: 13,
+    fontSize: 12,
   },
   plotCardDelete: {
     alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
     borderWidth: 1,
   },
   plotCardDeleteText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   imageWrap: {
-    marginTop: 16,
-    marginBottom: 16,
+    marginTop: 10,
+    marginBottom: 10,
     alignSelf: 'center',
   },
   profileArrowOverlay: {
     position: 'absolute',
     right: 0,
     bottom: 0,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileImage: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   profilePlaceholder: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
   name: {
     textAlign: 'center',
+    fontSize: 18,
   },
   code: {
-    fontSize: 16,
-    marginTop: 4,
+    fontSize: 13,
+    marginTop: 2,
   },
   error: {
     textAlign: 'center',
@@ -872,7 +890,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: '#fafafa',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
   },
   section: {
@@ -889,15 +907,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
-    gap: 12,
+    paddingVertical: 4,
+    gap: 8,
   },
   rowLabel: {
-    fontSize: 14,
+    fontSize: 12,
     flex: 0,
   },
   rowValue: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     flex: 1,
     textAlign: 'right',
@@ -906,19 +924,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 8,
     paddingHorizontal: 4,
-    gap: 12,
+    gap: 8,
   },
   docRowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     flex: 1,
     minWidth: 0,
   },
   docRowLabel: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '500',
     flex: 1,
   },

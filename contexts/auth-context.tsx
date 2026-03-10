@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useState } from 'react';
-import { login as apiLogin, fetchMe, setAuthToken } from '@/lib/api';
+import { login as apiLogin, fetchMe, setAuthToken, requestFarmerOtp as apiRequestFarmerOtp, verifyFarmerOtp as apiVerifyFarmerOtp } from '@/lib/api';
 
 type User = { id: string; email: string; role: string; tenant_id: string | null };
 
@@ -7,6 +7,8 @@ type AuthContextValue = {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string, role: 'FARMER' | 'FIELD_OFFICER') => Promise<void>;
+  loginWithFarmerOtp: (mobile: string, otp: string) => Promise<void>;
+  requestFarmerOtp: (mobile: string) => Promise<void>;
   logout: () => void;
   loadUser: () => Promise<void>;
 };
@@ -41,13 +43,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const requestFarmerOtp = useCallback(async (mobile: string) => {
+    await apiRequestFarmerOtp(mobile);
+  }, []);
+
+  const loginWithFarmerOtp = useCallback(
+    async (mobile: string, otp: string) => {
+      setIsLoading(true);
+      try {
+        const data = await apiVerifyFarmerOtp(mobile, otp);
+        setAuthToken(data.token);
+        setUser(data.user);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
   const logout = useCallback(() => {
     setAuthToken(null);
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, loadUser }}>
+    <AuthContext.Provider value={{ user, isLoading, login, loginWithFarmerOtp, requestFarmerOtp, logout, loadUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -51,21 +51,43 @@ export default function AddFarmerScreen() {
   const [saving, setSaving] = useState(false);
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
 
-  const pickProfileImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow access to photos to add a profile picture.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setProfileImageUri(result.assets[0].uri);
-    }
+  const pickProfileImage = () => {
+    Alert.alert('Profile picture', 'Choose source', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Gallery',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Allow access to photos to add a profile picture.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets[0]) setProfileImageUri(result.assets[0].uri);
+        },
+      },
+      {
+        text: 'Camera',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Allow access to the camera to take a picture.');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets[0]) setProfileImageUri(result.assets[0].uri);
+        },
+      },
+    ]);
   };
 
   const update = <K extends keyof typeof form>(key: K, value: typeof form[K]) => {
