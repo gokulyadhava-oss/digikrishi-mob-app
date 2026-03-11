@@ -53,6 +53,11 @@ const SEND_INTERVAL  = 5;
 const DEFAULT_REGION = { latitude: 20.5937, longitude: 78.9629, latitudeDelta: 0.004, longitudeDelta: 0.004 };
 
 // ─── BottomSheet ──────────────────────────────────────────────────────────────
+const BOTTOM_TABS = [
+  { id: 'measure' as const, label: 'Measure' },
+  { id: 'farms' as const, label: 'My Farms' },
+];
+
 function BottomSheet({
   collapsed,
   onToggle,
@@ -77,22 +82,17 @@ function BottomSheet({
         <View style={styles.dragHandle} />
         <View style={styles.collapsedRow}>
           <View style={[styles.tabs, { marginBottom: 0, flex: 1 }]}>
-            <Pressable
-              style={[styles.tab, activeTab === 'measure' && styles.tabActive]}
-              onPress={(e) => {
-                e.stopPropagation();
-                onTabPress('measure');
-              }}>
-              <Text style={[styles.tabText, activeTab === 'measure' && styles.tabTextActive]}>Measure</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.tab, activeTab === 'farms' && styles.tabActive]}
-              onPress={(e) => {
-                e.stopPropagation();
-                onTabPress('farms');
-              }}>
-              <Text style={[styles.tabText, activeTab === 'farms' && styles.tabTextActive]}>My Farms</Text>
-            </Pressable>
+            {BOTTOM_TABS.map((tab) => (
+              <Pressable
+                key={tab.id}
+                style={[styles.tab, activeTab === tab.id && styles.tabActive]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onTabPress(tab.id);
+                }}>
+                <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
+              </Pressable>
+            ))}
           </View>
         </View>
       </TouchableOpacity>
@@ -256,7 +256,8 @@ export default function PlotMapScreen() {
 
   useEffect(() => { loadSavedMaps(); }, [loadSavedMaps]);
 
-  // ── Initial location centre ───────────────────────────────────────────────
+  // ── Default on open: zoom in to my location a lot ─────────────────────────
+  const INITIAL_ZOOM = 21;
   useEffect(() => {
     if (initialLocationSet || !mapRef.current) return;
     let cancelled = false;
@@ -274,7 +275,7 @@ export default function PlotMapScreen() {
         });
         if (cancelled || !mapRef.current) return;
         mapRef.current.animateCamera(
-          { center: { latitude: loc.coords.latitude, longitude: loc.coords.longitude }, zoom: 19, heading: 0, pitch: 0 },
+          { center: { latitude: loc.coords.latitude, longitude: loc.coords.longitude }, zoom: INITIAL_ZOOM, heading: 0, pitch: 0 },
           { duration: 500 }
         );
         setAccuracy(Math.round(loc.coords.accuracy ?? 0));
@@ -326,7 +327,7 @@ export default function PlotMapScreen() {
     setPath((prev) => prev.slice(0, -1));
   }, [mode, path.length]);
 
-  // ── Centre on me ─────────────────────────────────────────────────────────
+  // ── Centre on me (zoom in a lot) ─────────────────────────────────────────
   const centerOnMe = useCallback(async () => {
     if (!mapRef.current) return;
     try {
@@ -338,8 +339,7 @@ export default function PlotMapScreen() {
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced, mayShowUserSettingsDialog: true });
       if (!mapRef.current) return;
       mapRef.current.animateCamera(
-        // Slightly wider zoom so you see surrounding streets, not just a single building
-        { center: { latitude: loc.coords.latitude, longitude: loc.coords.longitude }, zoom: 20, pitch: 10, heading: 0 },
+        { center: { latitude: loc.coords.latitude, longitude: loc.coords.longitude }, zoom: 21, pitch: 10, heading: 0 },
         { duration: 500 }
       );
       setAccuracy(Math.round(loc.coords.accuracy ?? 0));
@@ -628,14 +628,15 @@ export default function PlotMapScreen() {
           onToggle={() => setSheetCollapsed((c) => !c)}
           activeTab={activeTab}
           onTabPress={setActiveTab}>
-          {/* Tabs */}
           <View style={styles.tabs}>
-            <Pressable style={[styles.tab, activeTab === 'measure' && styles.tabActive]} onPress={() => setActiveTab('measure')}>
-              <Text style={[styles.tabText, activeTab === 'measure' && styles.tabTextActive]}>📐 Measure</Text>
-            </Pressable>
-            <Pressable style={[styles.tab, activeTab === 'farms' && styles.tabActive]} onPress={() => setActiveTab('farms')}>
-              <Text style={[styles.tabText, activeTab === 'farms' && styles.tabTextActive]}>🗂 My Farms</Text>
-            </Pressable>
+            {BOTTOM_TABS.map((tab) => (
+              <Pressable
+                key={tab.id}
+                style={[styles.tab, activeTab === tab.id && styles.tabActive]}
+                onPress={() => setActiveTab(tab.id)}>
+                <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
+              </Pressable>
+            ))}
           </View>
 
           {/* ── Measure Tab ── */}

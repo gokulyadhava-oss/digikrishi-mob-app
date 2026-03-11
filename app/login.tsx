@@ -84,42 +84,71 @@ function FarmerDoodle() {
       <Path d="M92 158 Q93 152 100 152 Q107 152 108 158Z" stroke="#A67C25" strokeWidth={1.2} fill="#D4A84330" />
       <Line x1={91} y1={158} x2={109} y2={158} stroke="#A67C25" strokeWidth={1.4} strokeLinecap="round" />
 
-      {/* ── Main farmer ── */}
+      {/* ── Main farmer (more detail) ── */}
+      {/* Legs */}
       <Line x1={112} y1={164} x2={119} y2={164} stroke={stroke} strokeWidth={2.2} strokeLinecap="round" />
       <Line x1={127} y1={164} x2={134} y2={164} stroke={stroke} strokeWidth={2.2} strokeLinecap="round" />
       <Line x1={120} y1={153} x2={116} y2={164} stroke={stroke} strokeWidth={2} strokeLinecap="round" />
       <Line x1={126} y1={153} x2={130} y2={164} stroke={stroke} strokeWidth={2} strokeLinecap="round" />
+      {/* Torso / shirt */}
       <Path d="M116 130 L116 153 Q118 154 123 154 Q128 154 130 153 L130 130"
-        stroke={green} strokeWidth={2} fill={Colors.primaryLight} fillOpacity={0.18}
+        stroke={green} strokeWidth={2} fill={Colors.primaryLight} fillOpacity={0.22}
         strokeLinecap="round" strokeLinejoin="round" />
+      <Line x1={123} y1={138} x2={123} y2={148} stroke={green} strokeWidth={1.2} strokeLinecap="round" />
+      <Line x1={118} y1={142} x2={128} y2={142} stroke={green} strokeWidth={0.8} strokeLinecap="round" opacity={0.8} />
+      {/* Left arm + hand to basket */}
       <Path d="M116 136 Q107 140 102 148" stroke={stroke} strokeWidth={1.8} strokeLinecap="round" />
       <Line x1={102} y1={148} x2={96} y2={158} stroke={green} strokeWidth={1.6} strokeLinecap="round" />
+      <Circle cx={96} cy={158} r={2.5} fill={skin} stroke={border} strokeWidth={0.6} />
       <Line x1={91} y1={157} x2={101} y2={157} stroke={green} strokeWidth={2.2} strokeLinecap="round" />
+      {/* Right arm + hand */}
       <Path d="M130 136 Q137 133 140 128" stroke={stroke} strokeWidth={1.8} strokeLinecap="round" />
       <Circle cx={141} cy={127} r={3} fill={skin} stroke={border} strokeWidth={0.8} />
+      <Path d="M139 126 L142 125 L143 127" stroke={border} strokeWidth={0.6} fill="none" strokeLinecap="round" />
+      {/* Neck */}
       <Line x1={123} y1={120} x2={123} y2={128} stroke={skin} strokeWidth={2.5} />
+      <Line x1={121} y1={124} x2={125} y2={124} stroke={border} strokeWidth={0.5} opacity={0.6} />
+      {/* Face */}
       <Circle cx={123} cy={114} r={10} fill={skin} stroke={border} strokeWidth={1.5} />
       <Circle cx={120} cy={113} r={1} fill="#2A1810" />
       <Circle cx={126} cy={113} r={1} fill="#2A1810" />
       <Path d="M119 117 Q123 120 127 117" stroke="#2A1810" strokeWidth={1} fill="none" strokeLinecap="round" />
+      <Path d="M118 108 Q123 106 128 108" stroke="#2A1810" strokeWidth={0.8} fill="none" strokeLinecap="round" opacity={0.7} />
+      {/* Hat */}
       <Path d="M112 109 Q113 108 123 108 Q133 108 134 109" stroke={stroke} strokeWidth={2.5} strokeLinecap="round" />
       <Path d="M115 109 Q115 100 123 100 Q131 100 131 109"
-        stroke={stroke} strokeWidth={1.8} fill={green} fillOpacity={0.35} strokeLinejoin="round" />
+        stroke={stroke} strokeWidth={1.8} fill={green} fillOpacity={0.4} strokeLinejoin="round" />
       <Line x1={115} y1={107} x2={131} y2={107} stroke={lime} strokeWidth={1.2} />
+      <Line x1={117} y1={103} x2={129} y2={103} stroke={stroke} strokeWidth={1} strokeLinecap="round" />
 
-      {/* ── Background farmer ── */}
-      <Line x1={165} y1={140} x2={165} y2={152} stroke="#607060" strokeWidth={1.5} strokeLinecap="round" />
-      <Circle cx={165} cy={135} r={6.5} fill={skin} stroke={border} strokeWidth={1.2} />
-      <Path d="M159 133 Q160 128 165 128 Q170 128 171 133"
-        stroke={green} strokeWidth={1.5} fill={Colors.primaryLight} fillOpacity={0.25} />
+      {/* ── Background farmer (more detail) ── */}
+      {/* Legs */}
+      <Line x1={162} y1={152} x2={158} y2={158} stroke="#607060" strokeWidth={1.6} strokeLinecap="round" />
+      <Line x1={168} y1={152} x2={171} y2={158} stroke="#607060" strokeWidth={1.6} strokeLinecap="round" />
+      <Line x1={160} y1={152} x2={160} y2={158} stroke="#5A6B5A" strokeWidth={1} strokeLinecap="round" opacity={0.6} />
+      <Line x1={170} y1={152} x2={170} y2={158} stroke="#5A6B5A" strokeWidth={1} strokeLinecap="round" opacity={0.6} />
+      {/* Torso */}
+      <Path d="M159 133 Q160 128 165 128 Q170 128 171 133 L171 152 L159 152 Z"
+        stroke={green} strokeWidth={1.5} fill={Colors.primaryLight} fillOpacity={0.28}
+        strokeLinejoin="round" />
       <Line x1={160} y1={133} x2={170} y2={133} stroke={green} strokeWidth={1.8} strokeLinecap="round" />
-      <Circle cx={163} cy={136} r={0.7} fill="#2A1810" />
-      <Circle cx={167} cy={136} r={0.7} fill="#2A1810" />
-      <Path d="M162 139 Q165 141 168 139" stroke="#2A1810" strokeWidth={0.9} fill="none" strokeLinecap="round" />
-      <Path d="M160 143 Q157 146 155 150" stroke="#607060" strokeWidth={1.4} strokeLinecap="round" />
-      <Path d="M170 143 Q173 146 172 149" stroke="#607060" strokeWidth={1.4} strokeLinecap="round" />
-      <Line x1={162} y1={152} x2={158} y2={158} stroke="#607060" strokeWidth={1.4} strokeLinecap="round" />
-      <Line x1={168} y1={152} x2={171} y2={158} stroke="#607060" strokeWidth={1.4} strokeLinecap="round" />
+      <Line x1={165} y1={138} x2={165} y2={145} stroke={green} strokeWidth={0.9} strokeLinecap="round" opacity={0.8} />
+      {/* Arms */}
+      <Path d="M160 143 Q157 146 155 150" stroke="#607060" strokeWidth={1.5} strokeLinecap="round" />
+      <Path d="M170 143 Q173 146 172 149" stroke="#607060" strokeWidth={1.5} strokeLinecap="round" />
+      <Circle cx={155} cy={150} r={1.8} fill={skin} stroke={border} strokeWidth={0.5} />
+      <Circle cx={172} cy={149} r={1.8} fill={skin} stroke={border} strokeWidth={0.5} />
+      {/* Neck */}
+      <Line x1={165} y1={140} x2={165} y2={132} stroke={skin} strokeWidth={2} strokeLinecap="round" />
+      {/* Face */}
+      <Circle cx={165} cy={125} r={7} fill={skin} stroke={border} strokeWidth={1.2} />
+      <Circle cx={163} cy={124} r={0.9} fill="#2A1810" />
+      <Circle cx={167} cy={124} r={0.9} fill="#2A1810" />
+      <Path d="M162 127 Q165 129 168 127" stroke="#2A1810" strokeWidth={0.8} fill="none" strokeLinecap="round" />
+      {/* Hat */}
+      <Path d="M158 122 Q159 118 165 118 Q171 118 172 122"
+        stroke={stroke} strokeWidth={1.4} fill={green} fillOpacity={0.35} strokeLinejoin="round" />
+      <Line x1={158} y1={122} x2={172} y2={122} stroke={lime} strokeWidth={0.9} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -519,7 +548,7 @@ const styles = StyleSheet.create({
   // ── Card ──
   card: {
     marginHorizontal: 20,
-    marginTop: 28,        // room for the pill overhang
+    marginTop: 16,
     padding: 24,
     borderRadius: 24,
     backgroundColor: Colors.surface,

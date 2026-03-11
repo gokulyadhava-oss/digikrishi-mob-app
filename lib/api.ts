@@ -478,8 +478,14 @@ export interface PlotMapRecord {
   created_at?: string;
 }
 
+/** List plot maps (farms) for a plot. May be restricted to agents; farmers should use fetchMyPlotMaps. */
 export async function fetchPlotMaps(plotId: string) {
   return api<PlotMapRecord[]>(`/farms?plot_id=${encodeURIComponent(plotId)}`);
+}
+
+/** Logged-in farmer: list maps (farms) for one of their own plots. Use this instead of fetchPlotMaps when the user is a farmer to avoid 403. */
+export async function fetchMyPlotMaps(plotId: string) {
+  return api<PlotMapRecord[]>(`/auth/me/plots/${plotId}/farms`);
 }
 
 export async function trackPlotMap(plotId: string, body: { session_id: string; points: Array<{ latitude: number; longitude: number; accuracy?: number; timestamp?: number }> }) {

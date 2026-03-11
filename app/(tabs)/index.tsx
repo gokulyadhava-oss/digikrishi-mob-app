@@ -263,8 +263,8 @@ export default function HomeScreen() {
                     const plotMeta = [plot.land_size_value != null && `${plot.land_size_value} ${plot.units ?? ''}`.trim(), plot.taluka, plot.district].filter(Boolean).join(' · ') || '—';
                     const goToPlot = () =>
                       router.push({
-                        pathname: '/plot/[id]',
-                        params: { id: plot.id, farmerId: String(farmer?.id), plotTitle, plotMeta },
+                        pathname: '/plot-farmer/[id]',
+                        params: { id: plot.id, plotTitle, plotMeta },
                       });
                     return (
                       <TouchableOpacity
