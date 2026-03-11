@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Text, Button } from 'react-native-paper';
 import { DatePickerModal } from 'react-native-paper-dates';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   type FarmerPlotPayload,
   PLOT_SEASON,
@@ -151,14 +151,14 @@ export function PlotFormModal({ visible, onClose, onSave }: PlotFormModalProps) 
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+      <View style={[styles.overlay, { backgroundColor: Colors.overlay }]}>
         <View style={[styles.box, { backgroundColor: colors.background }]}>
           <View style={styles.header}>
             <Text variant="titleMedium">
               {step === 1 ? 'Plot – Crop & land' : 'Plot – Address'}
             </Text>
             <TouchableOpacity onPress={handleClose} hitSlop={12}>
-              <IconSymbol name="xmark.circle.fill" size={28} color={colors.muted} />
+              <MaterialCommunityIcons name="close" size={28} color={colors.muted} />
             </TouchableOpacity>
           </View>
 
@@ -261,7 +261,7 @@ export function PlotFormModal({ visible, onClose, onSave }: PlotFormModalProps) 
                   {autoFillLoading ? (
                     <ActivityIndicator size="small" color={colors.primary} />
                   ) : (
-                    <IconSymbol name="mappin.circle.fill" size={20} color={colors.text} />
+                    <MaterialCommunityIcons name="map-marker-outline" size={20} color={colors.text} />
                   )}
                   <Text style={[styles.autoFillBtnText, { color: colors.text }]}>
                     {autoFillLoading ? 'Getting location…' : 'Auto fill Current Location'}
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: Colors.border,
   },
   scroll: { maxHeight: 610, padding: 16 },
   fieldLabel: { marginTop: 12, marginBottom: 4 },
@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
   halfBtn: { flex: 1 },
   pickerOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'center',
     padding: 24,
   },

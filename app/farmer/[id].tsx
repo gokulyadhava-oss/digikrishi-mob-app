@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   ScrollView,
   Image,
@@ -19,7 +20,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   fetchFarmer,
   getProfileDownloadUrl,
@@ -40,7 +41,21 @@ import {
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { PlotFormModal } from '@/components/plot-form-modal';
-import { LinearGradient } from 'expo-linear-gradient';
+
+// ─── Token aliases ─────────────────────────────────────────────────────────────
+const T = {
+  primary:      '#3D7A4F',
+  primaryLight: '#5FA870',
+  primaryDark:  '#245533',
+  secondary:    '#82C341',
+  bg:           '#F9FBF7',
+  surface:      '#FFFFFF',
+  text:         '#1B2A1E',
+  textMuted:    '#607060',
+  border:       '#E4EDE6',
+  headerTint:   '#EDF7EF',   // very subtle green for section headers
+  danger:       '#E05252',
+};
 
 const DOC_LABELS: Record<string, string> = {
   pan: 'PAN',
@@ -52,34 +67,69 @@ const DOC_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
+// ─── InfoCard ─────────────────────────────────────────────────────────────────
+function InfoCard({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: keyof typeof ICON_MAP;
+  children: React.ReactNode;
+}) {
+  const mciName = ICON_MAP[icon] ?? 'circle-outline';
+  return (
+    <View style={S.infoCard}>
+      {/* Subtle green tinted header */}
+      <View style={S.infoCardHeader}>
+        <MaterialCommunityIcons name={mciName} size={15} color={T.primary} />
+        <Text style={S.infoCardTitle}>{title}</Text>
+      </View>
+      <View style={S.infoCardBody}>{children}</View>
+    </View>
+  );
+}
+
+const ICON_MAP = {
+  'person.fill':       'account-circle-outline',
+  'mappin.circle.fill':'map-marker-outline',
+  'person.3.fill':     'account-group',
+  'banknote.fill':     'cash',
+  'doc.fill':          'file-document-outline',
+} as const;
+
+// ─── Row ──────────────────────────────────────────────────────────────────────
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={S.row}>
+      <Text style={S.rowLabel}>{label}</Text>
+      <Text style={S.rowValue} numberOfLines={2}>{value}</Text>
+    </View>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function FarmerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
-  const [farmer, setFarmer] = useState<Farmer | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-  const [profileActionLoading, setProfileActionLoading] = useState(false);
-  const [docActionLoading, setDocActionLoading] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'basics' | 'documents' | 'plot'>('basics');
-  const [plots, setPlots] = useState<FarmerPlotRecord[]>([]);
-  const [plotsLoading, setPlotsLoading] = useState(false);
-  const [plotFormVisible, setPlotFormVisible] = useState(false);
+  const router  = useRouter();
 
-  const colorScheme = useColorScheme() ?? 'dark';
-  const colors = Colors[colorScheme];
-  const docDividerColor = colorScheme === 'dark' ? 'rgba(250,250,250,0.22)' : 'rgba(26,26,26,0.14)';
-  const docButtonBorderColor = colorScheme === 'dark' ? 'rgba(250,250,250,0.45)' : 'rgba(26,26,26,0.3)';
+  const [farmer,               setFarmer]               = useState<Farmer | null>(null);
+  const [loading,              setLoading]               = useState(true);
+  const [refreshing,           setRefreshing]            = useState(false);
+  const [previewUrl,           setPreviewUrl]            = useState<string | null>(null);
+  const [profileImageUrl,      setProfileImageUrl]       = useState<string | null>(null);
+  const [profileActionLoading, setProfileActionLoading]  = useState(false);
+  const [docActionLoading,     setDocActionLoading]      = useState<string | null>(null);
+  const [activeTab,            setActiveTab]             = useState<'basics'|'documents'|'plot'>('basics');
+  const [plots,                setPlots]                 = useState<FarmerPlotRecord[]>([]);
+  const [plotsLoading,         setPlotsLoading]          = useState(false);
+  const [plotFormVisible,      setPlotFormVisible]       = useState(false);
 
-  const screenWidth = Dimensions.get('window').width;
-  const scrollPadding = 12;
-  const innerPadding = 12;
-  const contentWidth = screenWidth - scrollPadding * 2 - innerPadding * 2;
-  const TAB_WIDTH = contentWidth / 3;
-  const tabAnim = useRef(new Animated.Value(0)).current;
+  const screenWidth  = Dimensions.get('window').width;
+  const TAB_WIDTH    = (screenWidth - 32 - 8) / 3;   // card margins + inner pad
+  const tabAnim      = useRef(new Animated.Value(0)).current;
 
-  const handleTabPress = useCallback((key: 'basics' | 'documents' | 'plot', index: number) => {
+  const handleTabPress = useCallback((key: 'basics'|'documents'|'plot', index: number) => {
     setActiveTab(key);
     Animated.spring(tabAnim, {
       toValue: index * TAB_WIDTH,
@@ -96,24 +146,13 @@ export default function FarmerDetailScreen() {
       setFarmer(f);
       setProfileImageUrl(null);
       if (f.profile_pic_url) {
-        try {
-          const { url } = await getProfileDownloadUrl(id);
-          setProfileImageUrl(url);
-        } catch {
-          // keep placeholder
-        }
+        try { const { url } = await getProfileDownloadUrl(id); setProfileImageUrl(url); } catch {}
       }
-    } catch {
-      setFarmer(null);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    } catch { setFarmer(null); }
+    finally { setLoading(false); setRefreshing(false); }
   }, [id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -124,19 +163,12 @@ export default function FarmerDetailScreen() {
   const loadPlots = useCallback(async () => {
     if (!id) return;
     setPlotsLoading(true);
-    try {
-      const list = await fetchPlots(id);
-      setPlots(list);
-    } catch {
-      setPlots([]);
-    } finally {
-      setPlotsLoading(false);
-    }
+    try { const list = await fetchPlots(id); setPlots(list); }
+    catch { setPlots([]); }
+    finally { setPlotsLoading(false); }
   }, [id]);
 
-  useEffect(() => {
-    if (id && activeTab === 'plot') loadPlots();
-  }, [id, activeTab, loadPlots]);
+  useEffect(() => { if (id && activeTab === 'plot') loadPlots(); }, [id, activeTab, loadPlots]);
 
   const handleSavePlot = async (payload: FarmerPlotPayload) => {
     if (!id) return;
@@ -146,43 +178,28 @@ export default function FarmerDetailScreen() {
 
   const handleDeletePlot = (plot: FarmerPlotRecord) => {
     if (!id) return;
-    Alert.alert('Delete plot', `Remove this plot (${plot.season ?? '—'} / ${plot.variety ?? '—'})?`, [
+    Alert.alert('Delete plot', `Remove ${plot.season ?? '—'} / ${plot.variety ?? '—'}?`, [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deletePlot(id, plot.id);
-            await loadPlots();
-          } catch (e) {
-            Alert.alert('Error', e instanceof Error ? e.message : 'Failed to delete');
-          }
-        },
-      },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try { await deletePlot(id, plot.id); await loadPlots(); }
+        catch (e) { Alert.alert('Error', e instanceof Error ? e.message : 'Failed'); }
+      }},
     ]);
   };
 
   const handleDeleteProfile = () => {
     if (!id) return;
-    Alert.alert('Delete profile picture', 'Remove this profile picture?', [
+    Alert.alert('Remove profile picture', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setProfileActionLoading(true);
-          try {
-            await deleteProfile(id);
-            setProfileImageUrl(null);
-            setFarmer((prev) => (prev ? { ...prev, profile_pic_url: null } : null));
-          } catch (e) {
-            Alert.alert('Error', e instanceof Error ? e.message : 'Failed to delete');
-          } finally {
-            setProfileActionLoading(false);
-          }
-        },
-      },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        setProfileActionLoading(true);
+        try {
+          await deleteProfile(id);
+          setProfileImageUrl(null);
+          setFarmer(prev => prev ? { ...prev, profile_pic_url: null } : null);
+        } catch (e) { Alert.alert('Error', e instanceof Error ? e.message : 'Failed'); }
+        finally { setProfileActionLoading(false); }
+      }},
     ]);
   };
 
@@ -190,62 +207,34 @@ export default function FarmerDetailScreen() {
     if (!id) return;
     setProfileActionLoading(true);
     try {
-      const res = await uploadProfileImage(id, {
-        uri,
-        type: 'image/jpeg',
-        name: 'profile.jpg',
-      }, true);
+      const res = await uploadProfileImage(id, { uri, type: 'image/jpeg', name: 'profile.jpg' }, true);
       const { url } = await getProfileDownloadUrl(id);
       setProfileImageUrl(url);
-      setFarmer((prev) => (prev && res.profile_pic_url ? { ...prev, profile_pic_url: res.profile_pic_url } : prev));
-    } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Upload failed');
-    } finally {
-      setProfileActionLoading(false);
-    }
+      setFarmer(prev => prev && res.profile_pic_url ? { ...prev, profile_pic_url: res.profile_pic_url } : prev);
+    } catch (e) { Alert.alert('Error', e instanceof Error ? e.message : 'Upload failed'); }
+    finally { setProfileActionLoading(false); }
   };
 
   const handleReuploadProfile = () => {
     if (!id) return;
     Alert.alert('Profile picture', 'Choose source', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Gallery',
-        onPress: async () => {
-          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Permission needed', 'Allow access to photos to choose a picture.');
-            return;
-          }
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-          });
-          if (!result.canceled && result.assets[0]) await uploadProfileImageFromUri(result.assets[0].uri);
-        },
-      },
-      {
-        text: 'Camera',
-        onPress: async () => {
-          const { status } = await ImagePicker.requestCameraPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Permission needed', 'Allow access to the camera to take a picture.');
-            return;
-          }
-          const result = await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-          });
-          if (!result.canceled && result.assets[0]) await uploadProfileImageFromUri(result.assets[0].uri);
-        },
-      },
+      { text: 'Gallery', onPress: async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') { Alert.alert('Permission needed', 'Allow access to photos.'); return; }
+        const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1,1], quality: 0.8 });
+        if (!result.canceled && result.assets[0]) await uploadProfileImageFromUri(result.assets[0].uri);
+      }},
+      { text: 'Camera', onPress: async () => {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') { Alert.alert('Permission needed', 'Allow camera access.'); return; }
+        const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1,1], quality: 0.8 });
+        if (!result.canceled && result.assets[0]) await uploadProfileImageFromUri(result.assets[0].uri);
+      }},
     ]);
   };
 
-  const hasDoc = (docType: string): boolean => {
+  const hasDoc = (docType: string) => {
     const key = DOC_TYPE_TO_KEY[docType];
     const docs = farmer?.FarmerDoc;
     return Boolean(key && docs && (docs as Record<string, unknown>)[key]);
@@ -254,371 +243,322 @@ export default function FarmerDetailScreen() {
   const openDoc = async (docType: string) => {
     if (!id) return;
     setDocActionLoading(docType);
-    try {
-      const { url } = await getDocumentDownloadUrl(id, docType);
-      await WebBrowser.openBrowserAsync(url);
-    } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Could not open document');
-    } finally {
-      setDocActionLoading(null);
-    }
+    try { const { url } = await getDocumentDownloadUrl(id, docType); await WebBrowser.openBrowserAsync(url); }
+    catch (e) { Alert.alert('Error', e instanceof Error ? e.message : 'Could not open'); }
+    finally { setDocActionLoading(null); }
   };
 
   const handleDeleteDoc = (docType: string) => {
     if (!id) return;
-    Alert.alert(`Delete ${DOC_LABELS[docType] || docType}`, 'Remove this document?', [
+    Alert.alert(`Delete ${DOC_LABELS[docType] ?? docType}`, 'Remove this document?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setDocActionLoading(docType);
-          try {
-            await deleteDocument(id, docType);
-            await load();
-          } catch (e) {
-            Alert.alert('Error', e instanceof Error ? e.message : 'Failed to delete');
-          } finally {
-            setDocActionLoading(null);
-          }
-        },
-      },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        setDocActionLoading(docType);
+        try { await deleteDocument(id, docType); await load(); }
+        catch (e) { Alert.alert('Error', e instanceof Error ? e.message : 'Failed'); }
+        finally { setDocActionLoading(null); }
+      }},
     ]);
   };
 
   const handleReuploadDoc = async (docType: string) => {
     if (!id) return;
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['image/*', 'application/pdf'],
-      copyToCacheDirectory: true,
-    });
+    const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
     if (result.canceled) return;
     const file = result.assets[0];
     setDocActionLoading(docType);
-    try {
-      await uploadDocument(id, docType, {
-        uri: file.uri,
-        type: file.mimeType ?? 'application/pdf',
-        name: file.name ?? `${docType}.pdf`,
-      });
-      await load();
-    } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Upload failed');
-    } finally {
-      setDocActionLoading(null);
-    }
+    try { await uploadDocument(id, docType, { uri: file.uri, type: file.mimeType ?? 'application/pdf', name: file.name ?? `${docType}.pdf` }); await load(); }
+    catch (e) { Alert.alert('Error', e instanceof Error ? e.message : 'Upload failed'); }
+    finally { setDocActionLoading(null); }
   };
 
+  // ── Guards ────────────────────────────────────────────────────────────────
   if (loading && !farmer) {
     return (
-      <ThemedView style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </ThemedView>
+      <View style={[S.centered, { backgroundColor: T.bg }]}>
+        <ActivityIndicator size="large" color={T.primary} />
+      </View>
     );
   }
-
   if (!farmer) {
     return (
-      <ThemedView style={styles.centered}>
-        <ThemedText style={[styles.error, { color: colors.text }]}>
-          Farmer not found
-        </ThemedText>
-      </ThemedView>
+      <View style={[S.centered, { backgroundColor: T.bg }]}>
+        <Text style={{ color: T.text, fontSize: 14 }}>Farmer not found</Text>
+      </View>
     );
   }
 
-  const addr = farmer.FarmerAddress;
+  const addr    = farmer.FarmerAddress;
   const profile = farmer.FarmerProfileDetail;
-  const bank = farmer.FarmerBank;
-  const docs = farmer.FarmerDoc;
+  const bank    = farmer.FarmerBank;
+  const docs    = farmer.FarmerDoc;
 
   const tabs = [
-    { key: 'basics' as const, label: 'Basics Details' },
+    { key: 'basics'    as const, label: 'Basics'    },
     { key: 'documents' as const, label: 'Documents' },
-    { key: 'plot' as const, label: 'Plot' },
+    { key: 'plot'      as const, label: 'Plot'      },
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[S.root, { backgroundColor: T.bg }]}>
+
+      {/* ── Inline header ─────────────────────────────────────────────────── */}
+      <View style={[S.inlineHeader, { backgroundColor: T.bg, borderBottomColor: T.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={S.backBtn} hitSlop={12}>
+          <MaterialCommunityIcons name="arrow-left" size={24} color={T.text} />
+        </TouchableOpacity>
+        <Text style={S.headerTitle}>Farmer</Text>
+        <View style={{ width: 32 }} />
+      </View>
+
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }>
-        <ThemedText type="title" style={styles.name}>
-          {farmer.name}
-        </ThemedText>
-        <ThemedText style={[styles.code, { color: colors.text, opacity: 0.9 }]}>
-          {farmer.farmer_code}
-        </ThemedText>
-        <View style={[styles.badges, { marginTop: 12 }]}>
-          <View
-            style={[
-              styles.badge,
-              {
-                backgroundColor: farmer.is_activated ? colors.primary : colors.muted,
-              },
+        style={{ flex: 1 }}
+        contentContainerStyle={S.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.primary} />}
+      >
+
+        {/* ── Hero row: avatar left + name/code/badge right ─────────────── */}
+        <View style={S.heroRow}>
+          {/* Avatar */}
+          <TouchableOpacity
+            onPress={handleReuploadProfile}
+            onLongPress={farmer.profile_pic_url ? handleDeleteProfile : undefined}
+            disabled={profileActionLoading}
+            activeOpacity={0.85}
+            style={S.avatarWrap}
+          >
+            {profileImageUrl ? (
+              <Image source={{ uri: profileImageUrl }} style={S.avatar} resizeMode="cover" />
+            ) : (
+              <View style={S.avatarPlaceholder}>
+                <MaterialCommunityIcons name="account-circle-outline" size={40} color={T.primary} />
+              </View>
+            )}
+            {/* Camera badge */}
+            <View style={S.cameraBadge}>
+              {profileActionLoading
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <MaterialCommunityIcons name="camera-outline" size={13} color="#fff" />
+              }
+            </View>
+          </TouchableOpacity>
+
+          {/* Name + code + status */}
+          <View style={S.heroInfo}>
+            <Text style={S.heroName} numberOfLines={2}>{farmer.name}</Text>
+            <Text style={S.heroCode}>{farmer.farmer_code}</Text>
+            <View style={[
+              S.statusChip,
+              { backgroundColor: farmer.is_activated ? T.primary + '18' : '#F0F0F0',
+                borderColor:      farmer.is_activated ? T.primary + '40' : '#DDD' }
             ]}>
-            <ThemedText style={styles.badgeText}>
-              {farmer.is_activated ? 'Active' : 'Inactive'}
-            </ThemedText>
+              <View style={[S.statusDot, { backgroundColor: farmer.is_activated ? T.secondary : '#AAA' }]} />
+              <Text style={[S.statusText, { color: farmer.is_activated ? T.primary : T.textMuted }]}>
+                {farmer.is_activated ? 'Active' : 'Inactive'}
+              </Text>
+            </View>
           </View>
-      
         </View>
 
-        <View style={[styles.baseCard, { overflow: 'hidden', borderRadius: 16, marginTop: 16, borderWidth: 1, borderColor: colors.emeraldBorder ?? colors.cardBorder }]}>
-          <LinearGradient
-            colors={[Colors.cardHeaderGreen.gradientStart, Colors.cardHeaderGreen.gradientEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={styles.baseCardInner}>
-            <TouchableOpacity
-              style={styles.imageWrap}
-              onPress={handleReuploadProfile}
-              onLongPress={farmer.profile_pic_url ? handleDeleteProfile : undefined}
-              disabled={profileActionLoading}
-              activeOpacity={0.85}>
-              {profileImageUrl ? (
-                <Image
-                  source={{ uri: profileImageUrl }}
-                  style={styles.profileImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View
-                  style={[
-                    styles.profilePlaceholder,
-                    { backgroundColor: colors.muted },
-                  ]}>
-                  <IconSymbol name="person.fill" size={48} color={colors.background} />
-                </View>
-              )}
-              {profileActionLoading ? (
-                <View style={styles.profileArrowOverlay}>
-                  <ActivityIndicator size="small" color="#fff" />
-                </View>
-              ) : (
-                <View style={styles.profileArrowOverlay}>
-                  <IconSymbol name="arrow.up.circle.fill" size={28} color="rgba(255,255,255,0.95)" />
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <View style={[styles.tabBar, { backgroundColor: colors.muted, borderRadius: 14 }]}>
-              <Animated.View
-            style={{
-              position: 'absolute',
-              width: TAB_WIDTH - 6,
-              top: 3,
-              bottom: 3,
-              left: 3,
-              borderRadius: 9,
-              backgroundColor: colors.card,
-              transform: [{ translateX: tabAnim }],
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.08,
-              shadowRadius: 4,
-              elevation: 2,
-            }}
-          />
-          {tabs.map(({ key, label }, index) => (
-            <TouchableOpacity
-              key={key}
-              style={{ flex: 1, paddingVertical: 8, alignItems: 'center' }}
-              onPress={() => handleTabPress(key, index)}
-              activeOpacity={0.7}>
-              <ThemedText
-                style={{
-                  fontSize: 12,
-                  fontWeight: activeTab === key ? '700' : '400',
-                  color: colors.text,
-                  opacity: activeTab === key ? 1 : 0.88,
-                }}>
-                {label}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {activeTab === 'basics' && (
-          <View style={{ width: '100%', gap: 8, marginTop: 8 }}>
-            <InfoCard title="Personal" icon="person.fill" colors={colors}>
-              <Row label="Farmer Code" value={farmer.farmer_code ?? '—'} colors={colors} />
-              <Row label="Name" value={farmer.name ?? '—'} colors={colors} />
-              <Row label="Mobile" value={farmer.mobile ?? '—'} colors={colors} />
-              <Row label="Aadhaar" value={docs?.aadhaar_number ?? '—'} colors={colors} />
-              <Row label="PAN" value={docs?.pan_number ?? '—'} colors={colors} />
-              <Row
-                label="Ration Card"
-                value={profile?.ration_card === true ? 'Available' : 'Not available'}
-                colors={colors}
-              />
-            </InfoCard>
-            <InfoCard title="Address" icon="mappin.circle.fill" colors={colors}>
-              <Row label="Village" value={addr?.village ?? '—'} colors={colors} />
-              <Row label="Taluka" value={addr?.taluka ?? '—'} colors={colors} />
-              <Row label="District" value={addr?.district ?? '—'} colors={colors} />
-            </InfoCard>
-            <InfoCard title="Associations" icon="person.3.fill" colors={colors}>
-              <Row label="FPC" value={profile?.fpc ?? '—'} colors={colors} />
-              <Row label="SHG" value={profile?.shg ?? '—'} colors={colors} />
-            </InfoCard>
-            <InfoCard title="Bank" icon="banknote.fill" colors={colors}>
-              <Row label="Bank Name" value={bank?.bank_name ?? '—'} colors={colors} />
-              <Row label="IFSC" value={bank?.ifsc_code ?? '—'} colors={colors} />
-              <Row label="Account No." value={bank?.account_number ?? '—'} colors={colors} />
-              <Row
-                label="Verification"
-                value={bank?.verified === true ? 'Verified ✓' : 'Not verified'}
-                colors={colors}
-              />
-            </InfoCard>
+        {/* ── Tab bar ───────────────────────────────────────────────────── */}
+        <View style={S.tabCard}>
+          <View style={[S.tabBar, { backgroundColor: T.bg }]}>
+            <Animated.View style={[S.tabIndicator, { width: TAB_WIDTH - 6, transform: [{ translateX: tabAnim }] }]} />
+            {tabs.map(({ key, label }, index) => (
+              <TouchableOpacity
+                key={key}
+                style={[S.tabItem, { width: TAB_WIDTH }]}
+                onPress={() => handleTabPress(key, index)}
+                activeOpacity={0.7}
+              >
+                <Text style={[S.tabLabel, activeTab === key && S.tabLabelActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
 
-        {activeTab === 'documents' && (
-          <View style={{ width: '100%', marginTop: 8 }}>
-            <InfoCard title="Documents" icon="doc.fill" colors={colors}>
-              {DOC_TYPES.map((docType, idx) => {
-                const has = hasDoc(docType);
-                const loading = docActionLoading === docType;
-                const isLast = idx === DOC_TYPES.length - 1;
-                return (
-                  <View
-                    key={docType}
-                    style={[
-                      styles.docRow,
-                      !isLast && { borderBottomWidth: 1, borderBottomColor: docDividerColor },
-                    ]}>
-                    <View style={styles.docRowLeft}>
-                      <IconSymbol
-                        name="doc.fill"
-                        size={20}
-                        color={colors.text}
-                      />
-                      <ThemedText
-                        style={[styles.docRowLabel, { color: colors.text }]}
-                        numberOfLines={1}>
-                        {DOC_LABELS[docType] ?? docType}
-                      </ThemedText>
-                    </View>
-                    <View style={styles.docRowActions}>
-                      {has ? (
-                        <>
-                          <TouchableOpacity
-                            onPress={() => openDoc(docType)}
-                            disabled={loading}
-                            style={styles.docRowIconBtn}
-                            accessibilityLabel="View document">
-                            <IconSymbol name="eye.fill" size={22} color={colors.text} />
-                          </TouchableOpacity>
+          {/* ── BASICS ──────────────────────────────────────────────────── */}
+          {activeTab === 'basics' && (
+            <View style={S.tabContent}>
+              <InfoCard title="Personal" icon="person.fill">
+                <Row label="Farmer Code" value={farmer.farmer_code ?? '—'} />
+                <Row label="Name"        value={farmer.name ?? '—'} />
+                <Row label="Mobile"      value={farmer.mobile ?? '—'} />
+                <Row label="Aadhaar"     value={docs?.aadhaar_number ?? '—'} />
+                <Row label="PAN"         value={docs?.pan_number ?? '—'} />
+                <Row label="Ration Card" value={profile?.ration_card === true ? 'Available' : 'Not available'} />
+              </InfoCard>
+              <InfoCard title="Address" icon="mappin.circle.fill">
+                <Row label="Village"  value={addr?.village  ?? '—'} />
+                <Row label="Taluka"   value={addr?.taluka   ?? '—'} />
+                <Row label="District" value={addr?.district ?? '—'} />
+              </InfoCard>
+              <InfoCard title="Associations" icon="person.3.fill">
+                <Row label="FPC" value={profile?.fpc ?? '—'} />
+                <Row label="SHG" value={profile?.shg ?? '—'} />
+              </InfoCard>
+              <InfoCard title="Bank" icon="banknote.fill">
+                <Row label="Bank Name"   value={bank?.bank_name      ?? '—'} />
+                <Row label="IFSC"        value={bank?.ifsc_code       ?? '—'} />
+                <Row label="Account No." value={bank?.account_number  ?? '—'} />
+                <Row label="Verification" value={bank?.verified === true ? 'Verified ✓' : 'Not verified'} />
+              </InfoCard>
+            </View>
+          )}
+
+          {/* ── DOCUMENTS ───────────────────────────────────────────────── */}
+          {activeTab === 'documents' && (
+            <View style={S.tabContent}>
+              <InfoCard title="Documents" icon="doc.fill">
+                {DOC_TYPES.map((docType, idx) => {
+                  const has     = hasDoc(docType);
+                  const busy    = docActionLoading === docType;
+                  const isLast  = idx === DOC_TYPES.length - 1;
+                  return (
+                    <View key={docType} style={[S.docRow, !isLast && { borderBottomWidth: 1, borderBottomColor: T.border }]}>
+                      <View style={S.docRowLeft}>
+                        <MaterialCommunityIcons
+                          name={has ? 'file-check-outline' : 'file-document-outline'}
+                          size={18}
+                          color={has ? T.primary : T.textMuted}
+                        />
+                        <Text style={[S.docLabel, { color: has ? T.text : T.textMuted }]} numberOfLines={1}>
+                          {DOC_LABELS[docType] ?? docType}
+                        </Text>
+                      </View>
+                      <View style={S.docRowActions}>
+                        {has ? (
+                          <>
+                            <TouchableOpacity onPress={() => openDoc(docType)} disabled={busy} style={S.docIconBtn}>
+                              <MaterialCommunityIcons name="eye-outline" size={20} color={T.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleReuploadDoc(docType)} disabled={busy} style={S.docIconBtn}>
+                              {busy
+                                ? <ActivityIndicator size="small" color={T.primary} />
+                                : <MaterialCommunityIcons name="refresh" size={20} color={T.primary} />
+                              }
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleDeleteDoc(docType)} disabled={busy} style={S.docIconBtn}>
+                              <MaterialCommunityIcons name="delete-outline" size={20} color={T.danger} />
+                            </TouchableOpacity>
+                          </>
+                        ) : (
                           <TouchableOpacity
                             onPress={() => handleReuploadDoc(docType)}
-                            disabled={loading}
-                            style={styles.docRowIconBtn}
-                            accessibilityLabel="Replace document">
-                            {loading ? (
-                              <ActivityIndicator size="small" color={colors.text} />
-                            ) : (
-                              <IconSymbol name="arrow.triangle.2.circlepath" size={22} color={colors.text} />
-                            )}
+                            disabled={busy}
+                            style={S.uploadChip}
+                          >
+                            {busy
+                              ? <ActivityIndicator size="small" color={T.primary} />
+                              : <>
+                                  <MaterialCommunityIcons name="upload-outline" size={13} color={T.primary} />
+                                  <Text style={S.uploadChipText}>Upload</Text>
+                                </>
+                            }
                           </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => handleDeleteDoc(docType)}
-                            disabled={loading}
-                            style={styles.docRowIconBtn}
-                            accessibilityLabel="Remove document">
-                            <IconSymbol name="trash.fill" size={22} color={colors.destructive} />
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <TouchableOpacity
-                          onPress={() => handleReuploadDoc(docType)}
-                          disabled={loading}
-                          style={[styles.docUploadBtn, { borderWidth: 1.5, borderColor: docButtonBorderColor, backgroundColor: 'transparent' }]}>
-                          {loading ? (
-                            <ActivityIndicator size="small" color={colors.text} />
-                          ) : (
-                            <ThemedText style={[styles.docUploadBtnText, { color: colors.text }]}>Upload</ThemedText>
-                          )}
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </InfoCard>
-          </View>
-        )}
-
-        {activeTab === 'plot' && (
-          <View style={[styles.plotTab, { marginTop: 8 }]}>
-            {plotsLoading ? (
-              <ActivityIndicator size="large" color={colors.primary} style={styles.plotLoader} />
-            ) : plots.length === 0 ? (
-              <TouchableOpacity
-                style={[styles.addPlotCard, { borderColor: colors.primary, backgroundColor: colors.card }]}
-                onPress={() => setPlotFormVisible(true)}
-                activeOpacity={0.8}>
-                <IconSymbol name="plus.circle.fill" size={40} color={colors.text} />
-                <ThemedText type="subtitle" style={[styles.addPlotTitle, { color: colors.text }]}>Add Plot</ThemedText>
-                <ThemedText style={[styles.addPlotSub, { color: colors.text, opacity: 0.9 }]}>
-                  Tap to add season, variety, land & address
-                </ThemedText>
-              </TouchableOpacity>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={[styles.addPlotCardSmall, { borderColor: colors.primary }]}
-                  onPress={() => setPlotFormVisible(true)}
-                  activeOpacity={0.8}>
-                  <IconSymbol name="plus.circle.fill" size={24} color={colors.text} />
-                  <ThemedText style={[styles.addPlotTitleSmall, { color: colors.text }]}>Add another plot</ThemedText>
-                </TouchableOpacity>
-                {plots.map((plot) => {
-                  const plotTitle = [plot.season, plot.variety].filter(Boolean).join(' · ') || 'Plot';
-                  const plotMeta = [plot.land_size_value != null && `${plot.land_size_value} ${plot.units ?? ''}`.trim(), plot.taluka, plot.district].filter(Boolean).join(' · ') || '—';
-                  const goToPlot = () => router.push({ pathname: '/plot/[id]', params: { id: plot.id, farmerId: String(id), plotTitle, plotMeta } });
-                  return (
-                    <View key={plot.id} style={[styles.plotCard, { borderColor: colors.emeraldBorder ?? colors.cardBorder ?? colors.border }]}>
-                      <View style={styles.plotCardContent}>
-                        <TouchableOpacity style={styles.plotCardBodyTouch} activeOpacity={0.9} onPress={goToPlot}>
-                          <View style={styles.plotCardBody}>
-                            <ThemedText type="subtitle" style={styles.plotCardTitle}>
-                              {plotTitle}
-                            </ThemedText>
-                            <ThemedText style={[styles.plotCardMeta, { color: colors.text, opacity: 0.9 }]}>
-                              {plotMeta}
-                            </ThemedText>
-                            {plot.sowing_date ? (
-                              <ThemedText style={[styles.plotCardMeta, { color: colors.text, opacity: 0.9 }]}>
-                                Sowing: {plot.sowing_date}
-                              </ThemedText>
-                            ) : null}
-                          </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleDeletePlot(plot)}
-                          style={[styles.plotCardDelete, { borderColor: colors.destructive }]}>
-                          <ThemedText style={[styles.plotCardDeleteText, { color: colors.destructive }]}>Delete</ThemedText>
-                        </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   );
                 })}
-              </>
-            )}
-          </View>
-        )}
-          </View>
+              </InfoCard>
+            </View>
+          )}
+
+          {/* ── PLOT ────────────────────────────────────────────────────── */}
+          {activeTab === 'plot' && (
+            <View style={S.tabContent}>
+              {/* Add plot button */}
+              <TouchableOpacity
+                style={S.addPlotBtn}
+                onPress={() => setPlotFormVisible(true)}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="plus-circle-outline" size={18} color={T.primary} />
+                <Text style={S.addPlotBtnText}>Add plot</Text>
+              </TouchableOpacity>
+
+              {plotsLoading ? (
+                <ActivityIndicator size="large" color={T.primary} style={{ marginTop: 24 }} />
+              ) : plots.length === 0 ? (
+                <View style={S.plotEmpty}>
+                  <MaterialCommunityIcons name="sprout" size={36} color={T.border} />
+                  <Text style={S.plotEmptyText}>No plots yet</Text>
+                  <Text style={S.plotEmptySubtext}>Tap "Add plot" to record the first one</Text>
+                </View>
+              ) : (
+                <View style={S.plotList}>
+                  {plots.map((plot) => {
+                    const season  = plot.season ?? '—';
+                    const variety = plot.variety ?? '—';
+                    const size    = plot.land_size_value != null
+                      ? `${plot.land_size_value} ${plot.units ?? ''}`.trim()
+                      : null;
+                    const loc     = [plot.taluka, plot.district].filter(Boolean).join(', ');
+                    const plotTitle = `${season} · ${variety}`;
+                    const plotMeta  = [size, loc].filter(Boolean).join(' · ');
+
+                    const goToPlot = () => router.push({
+                      pathname: '/plot/[id]',
+                      params: { id: plot.id, farmerId: String(id), plotTitle, plotMeta },
+                    });
+
+                    return (
+                      <TouchableOpacity
+                        key={plot.id}
+                        style={S.plotChip}
+                        onPress={goToPlot}
+                        activeOpacity={0.85}
+                      >
+                        {/* Left green accent */}
+                        <View style={S.plotChipAccent} />
+
+                        <View style={S.plotChipBody}>
+                          {/* Top row: title + delete */}
+                          <View style={S.plotChipTopRow}>
+                            <Text style={S.plotChipTitle} numberOfLines={1}>{plotTitle}</Text>
+                            <TouchableOpacity
+                              onPress={() => handleDeletePlot(plot)}
+                              style={S.plotDeleteBtn}
+                              hitSlop={8}
+                            >
+                              <MaterialCommunityIcons name="trash-can-outline" size={16} color={T.danger} />
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Meta chips row */}
+                          <View style={S.plotChipMeta}>
+                            {size && (
+                              <View style={S.metaChip}>
+                                <MaterialCommunityIcons name="terrain" size={11} color={T.primary} />
+                                <Text style={S.metaChipText}>{size}</Text>
+                              </View>
+                            )}
+                            {loc ? (
+                              <View style={S.metaChip}>
+                                <MaterialCommunityIcons name="map-marker-outline" size={11} color={T.primary} />
+                                <Text style={S.metaChipText}>{loc}</Text>
+                              </View>
+                            ) : null}
+                            {plot.sowing_date && (
+                              <View style={S.metaChip}>
+                                <MaterialCommunityIcons name="calendar-outline" size={11} color={T.primary} />
+                                <Text style={S.metaChipText}>{plot.sowing_date}</Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+
+                        {/* Arrow */}
+                        <MaterialCommunityIcons name="chevron-right" size={18} color={T.border} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -628,26 +568,14 @@ export default function FarmerDetailScreen() {
         onSave={handleSavePlot}
       />
 
-      <Modal
-        visible={!!previewUrl}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPreviewUrl(null)}>
-        <Pressable
-          style={styles.previewOverlay}
-          onPress={() => setPreviewUrl(null)}>
-          <View style={styles.previewContent}>
-            {previewUrl ? (
-              <Image
-                source={{ uri: previewUrl }}
-                style={styles.previewImage}
-                resizeMode="contain"
-              />
-            ) : null}
-            <TouchableOpacity
-              style={[styles.previewClose, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => setPreviewUrl(null)}>
-              <ThemedText style={styles.previewCloseText}>Close</ThemedText>
+      <Modal visible={!!previewUrl} transparent animationType="fade" onRequestClose={() => setPreviewUrl(null)}>
+        <Pressable style={S.previewOverlay} onPress={() => setPreviewUrl(null)}>
+          <View style={S.previewContent}>
+            {previewUrl && (
+              <Image source={{ uri: previewUrl }} style={S.previewImage} resizeMode="contain" />
+            )}
+            <TouchableOpacity style={S.previewClose} onPress={() => setPreviewUrl(null)}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: T.text }}>Close</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -656,341 +584,278 @@ export default function FarmerDetailScreen() {
   );
 }
 
-function Row({
-  label,
-  value,
-  colors,
-}: {
-  label: string;
-  value: string;
-  colors: { text: string };
-}) {
-  return (
-    <View style={styles.row}>
-      <ThemedText style={[styles.rowLabel, { color: colors.text, opacity: 0.9 }]}>
-        {label}
-      </ThemedText>
-      <ThemedText style={styles.rowValue} numberOfLines={2}>
-        {value}
-      </ThemedText>
-    </View>
-  );
-}
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const S = StyleSheet.create({
+  root:    { flex: 1 },
+  centered:{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
 
-function InfoCard({
-  title,
-  icon,
-  colors,
-  children,
-}: {
-  title: string;
-  icon: 'person.fill' | 'mappin.circle.fill' | 'person.3.fill' | 'banknote.fill' | 'doc.fill';
-  colors: { card: string; border: string; muted: string; primary: string; mutedForeground: string; emeraldBorder?: string; cardBorder?: string };
-  children: React.ReactNode;
-}) {
-  const { gradientStart, gradientEnd, text: headerText, icon: headerIcon } = Colors.cardHeaderGreen;
-  const cardBorderColor = colors.emeraldBorder ?? colors.cardBorder ?? colors.border;
-  return (
-    <View
-      style={{
-        backgroundColor: colors.card,
-        borderRadius: 12,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: cardBorderColor,
-      }}>
-      <LinearGradient
-        colors={[gradientStart, gradientEnd]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-        }}>
-        <IconSymbol name={icon} size={12} color={headerIcon} />
-        <ThemedText
-          style={{
-            fontSize: 11,
-            fontWeight: '700',
-            letterSpacing: 0.5,
-            textTransform: 'uppercase',
-            color: headerText,
-          }}>
-          {title}
-        </ThemedText>
-      </LinearGradient>
-      <View style={{ paddingHorizontal: 10, paddingVertical: 2 }}>{children}</View>
-    </View>
-  );
-}
+  // Header
+  inlineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+  },
+  backBtn:     { padding: 4 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: T.text },
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  centered: {
-    flex: 1,
+  // Scroll
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+    gap: 12,
+  },
+
+  // ── Hero row ──
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: T.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: T.border,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  avatarWrap: { position: 'relative' },
+  avatar: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
+    borderColor: T.border,
+  },
+  avatarPlaceholder: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: T.headerTint,
+    borderWidth: 2,
+    borderColor: T.border,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
   },
-  scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 32,
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: T.primary,
+    justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: T.surface,
   },
-  baseCard: {
-    width: '100%',
+  heroInfo:   { flex: 1, gap: 3 },
+  heroName:   { fontSize: 17, fontWeight: '800', color: T.text, lineHeight: 22 },
+  heroCode:   { fontSize: 12, color: T.textMuted, fontFamily: 'monospace' },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 99,
+    borderWidth: 1,
+    marginTop: 2,
   },
-  baseCardInner: {
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 8,
+  statusDot:  { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 11, fontWeight: '600' },
+
+  // ── Tab card ──
+  tabCard: {
+    backgroundColor: T.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: T.border,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   tabBar: {
     flexDirection: 'row',
-    width: '100%',
-    marginTop: 8,
-    padding: 3,
-    height: 38,
+    padding: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: T.border,
+    position: 'relative',
   },
-  placeholderText: {
-    fontSize: 14,
-    marginTop: 8,
-  },
-  plotTab: {
-    width: '100%',
-    marginTop: 16,
-    paddingHorizontal: 4,
-  },
-  plotLoader: {
-    marginTop: 24,
-  },
-  addPlotCard: {
-    width: '100%',
-    minHeight: 120,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  addPlotTitle: {
-    marginTop: 8,
-    fontSize: 15,
-  },
-  addPlotSub: {
-    fontSize: 12,
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  addPlotCardSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
+  tabIndicator: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    left: 4,
+    borderRadius: 9,
+    backgroundColor: T.surface,
+    shadowColor: T.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
     borderWidth: 1,
-    borderStyle: 'dashed',
-    marginBottom: 8,
+    borderColor: T.border,
   },
-  addPlotTitleSmall: {
-    fontSize: 13,
-  },
-  plotCard: {
-    width: '100%',
-    borderRadius: 10,
+  tabItem:  { paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
+  tabLabel: { fontSize: 12, fontWeight: '400', color: T.textMuted },
+  tabLabelActive: { fontWeight: '700', color: T.primary },
+
+  tabContent: { padding: 12, gap: 10 },
+
+  // ── InfoCard ──
+  infoCard: {
+    borderRadius: 13,
     borderWidth: 1,
-    marginBottom: 8,
+    borderColor: T.border,
     overflow: 'hidden',
   },
-  plotCardContent: {
-    padding: 10,
+  infoCardHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  plotCardBodyTouch: {
-    flex: 1,
-    minWidth: 0,
-  },
-  plotCardBody: {
-    gap: 2,
-  },
-  plotCardTitle: {
-    fontSize: 14,
-  },
-  plotCardMeta: {
-    fontSize: 12,
-  },
-  plotCardDelete: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  plotCardDeleteText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  imageWrap: {
-    marginTop: 10,
-    marginBottom: 10,
-    alignSelf: 'center',
-  },
-  profileArrowOverlay: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
     alignItems: 'center',
-  },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  profilePlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  name: {
-    textAlign: 'center',
-    fontSize: 18,
-  },
-  code: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  error: {
-    textAlign: 'center',
-  },
-  badges: {
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  badge: {
+    gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 8,
+    backgroundColor: T.headerTint,
+    borderBottomWidth: 1,
+    borderBottomColor: T.border,
   },
-  badgeText: {
-    color: '#fafafa',
-    fontSize: 12,
-    fontWeight: '500',
+  infoCardTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: T.primary,
   },
-  section: {
-    width: '100%',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 16,
-    gap: 8,
-  },
-  sectionTitle: {
-    marginBottom: 4,
-  },
+  infoCardBody: { paddingHorizontal: 12, paddingVertical: 4 },
+
+  // ── Row ──
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: T.border + '80',
     gap: 8,
   },
-  rowLabel: {
-    fontSize: 12,
-    flex: 0,
-  },
-  rowValue: {
-    fontSize: 12,
-    fontWeight: '500',
-    flex: 1,
-    textAlign: 'right',
-  },
+  rowLabel: { fontSize: 12, color: T.textMuted, flex: 0 },
+  rowValue: { fontSize: 12, fontWeight: '600', color: T.text, flex: 1, textAlign: 'right' },
+
+  // ── Documents ──
   docRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
     gap: 8,
   },
-  docRowLeft: {
+  docRowLeft:    { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
+  docLabel:      { fontSize: 13, fontWeight: '500', flex: 1 },
+  docRowActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  docIconBtn:    { padding: 6 },
+  uploadChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flex: 1,
-    minWidth: 0,
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: T.primary + '50',
+    backgroundColor: T.headerTint,
   },
-  docRowLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    flex: 1,
-  },
-  docRowActions: {
+  uploadChipText: { fontSize: 12, fontWeight: '600', color: T.primary },
+
+  // ── Plot ──
+  addPlotBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: T.primary + '60',
+    backgroundColor: T.headerTint,
   },
-  docRowIconBtn: {
-    padding: 8,
-    margin: -4,
+  addPlotBtnText: { fontSize: 13, fontWeight: '700', color: T.primary },
+
+  plotEmpty: { alignItems: 'center', paddingVertical: 32, gap: 6 },
+  plotEmptyText:    { fontSize: 14, fontWeight: '600', color: T.textMuted },
+  plotEmptySubtext: { fontSize: 12, color: T.textMuted, textAlign: 'center' },
+
+  plotList: { gap: 8 },
+  plotChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: T.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: T.border,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  docRowBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+  plotChipAccent: {
+    width: 4,
+    alignSelf: 'stretch',
+    backgroundColor: T.secondary,
   },
-  docRowBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+  plotChipBody: { flex: 1, paddingVertical: 10, paddingHorizontal: 12, gap: 6 },
+  plotChipTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  docUploadBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+  plotChipTitle:  { fontSize: 13, fontWeight: '700', color: T.text, flex: 1 },
+  plotDeleteBtn:  { padding: 2 },
+  plotChipMeta:   { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: T.headerTint,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: T.border,
   },
-  docUploadBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  metaChipText: { fontSize: 10, color: T.textMuted, fontWeight: '500' },
+
+  // ── Preview modal ──
   previewOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
-  previewContent: {
-    width: '100%',
-    maxHeight: '90%',
-    alignItems: 'center',
-  },
-  previewImage: {
-    width: '100%',
-    height: 400,
-    marginBottom: 16,
-  },
+  previewContent: { width: '100%', maxHeight: '90%', alignItems: 'center' },
+  previewImage:   { width: '100%', height: 400, marginBottom: 16 },
   previewClose: {
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 8,
+    borderRadius: 10,
+    backgroundColor: T.surface,
     borderWidth: 1,
-  },
-  previewCloseText: {
-    fontSize: 16,
-    fontWeight: '600',
+    borderColor: T.border,
   },
 });

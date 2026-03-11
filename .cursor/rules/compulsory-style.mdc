@@ -1,0 +1,224 @@
+---
+alwaysApply: true
+---
+Great choice! Here's a detailed prompt you can paste directly into Cursor:
+
+---
+
+## 🌿 Cursor Prompt — Fresh Growth AgriTech Design System
+
+```
+You are a React Native UI expert. Refactor the entire app to use the 
+following design system consistently across ALL screens, components, 
+and navigation.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DESIGN TOKENS — replace every hardcoded color with these
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Create a file: src/theme/colors.ts
+
+export const Colors = {
+  primary:        '#3D7A4F',
+  primaryLight:   '#5FA870',
+  primaryDark:    '#245533',
+  secondary:      '#82C341',
+  secondaryLight: '#A5DA6B',
+  secondaryDark:  '#5A8E28',
+  bg:             '#F9FBF7',
+  surface:        '#FFFFFF',
+  text:           '#1B2A1E',
+  textMuted:      '#607060',
+  border:         '#E4EDE6',
+  danger:         '#E05252',
+  warning:        '#F4A623',
+};
+
+Create a file: src/theme/typography.ts
+
+import { StyleSheet } from 'react-native';
+
+export const Typography = {
+  fontFamily: 'Outfit',   // expo install expo-font + @expo-google-fonts/outfit
+  h1:    { fontSize: 26, fontWeight: '800', color: Colors.text },
+  h2:    { fontSize: 20, fontWeight: '700', color: Colors.text },
+  h3:    { fontSize: 16, fontWeight: '700', color: Colors.text },
+  body:  { fontSize: 14, fontWeight: '400', color: Colors.text },
+  small: { fontSize: 12, fontWeight: '400', color: Colors.textMuted },
+  label: { fontSize: 11, fontWeight: '700', color: Colors.textMuted, 
+           letterSpacing: 0.8, textTransform: 'uppercase' },
+};
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NAVIGATION — Fix the top header bar
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PROBLEM: The current app has a default React Navigation header that 
+shows a back arrow + screen title in a top bar. This looks like a 
+web app, not a mobile app. Remove or replace it correctly.
+
+RULES:
+- Set headerShown: false on ALL stack and tab navigators
+- Do NOT use the default navigation header anywhere
+- Each screen builds its own top section natively as part of the 
+  ScrollView or View content — NOT as a floating nav bar
+- For screens that need a back button, use a custom inline header 
+  component (see below)
+- The status bar should use: 
+  <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
+
+Custom inline header pattern to use on detail/inner screens:
+  <View style={styles.inlineHeader}>
+    <TouchableOpacity onPress={() => navigation.goBack()}>
+      <MaterialCommunityIcons name="arrow-left" size={24} color={Colors.text} />
+    </TouchableOpacity>
+    <Text style={styles.inlineHeaderTitle}>{title}</Text>
+    <View style={{ width: 24 }} /> {/* spacer for centering */}
+  </View>
+
+  inlineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    backgroundColor: Colors.bg,
+  },
+  inlineHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REACT NATIVE PAPER — Theme override
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Create a file: src/theme/paperTheme.ts
+
+import { MD3LightTheme } from 'react-native-paper';
+import { Colors } from './colors';
+
+export const paperTheme = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    primary:          Colors.primary,
+    secondary:        Colors.secondary,
+    background:       Colors.bg,
+    surface:          Colors.surface,
+    onPrimary:        '#FFFFFF',
+    onSecondary:      '#FFFFFF',
+    onBackground:     Colors.text,
+    onSurface:        Colors.text,
+    outline:          Colors.border,
+    error:            Colors.danger,
+    surfaceVariant:   '#EDF3EF',
+    onSurfaceVariant: Colors.textMuted,
+  },
+  fonts: {
+    ...MD3LightTheme.fonts,
+    // all font variants use Outfit
+  },
+};
+
+In App.tsx wrap with:
+  <PaperProvider theme={paperTheme}>
+    ...
+  </PaperProvider>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ICONS — MaterialCommunityIcons usage
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Package is already included in react-native-vector-icons.
+Import pattern:
+  import MaterialCommunityIcons from 
+    'react-native-vector-icons/MaterialCommunityIcons';
+
+Replace ALL icons in the app with MaterialCommunityIcons.
+Use these specific icon names for AgriTech contexts:
+
+  Dashboard/Home     → 'view-dashboard-outline'
+  Crop / Plant       → 'sprout'
+  Field / Zone       → 'map-marker-outline'
+  Weather            → 'weather-partly-cloudy'
+  Water / Moisture   → 'water-outline'
+  Temperature        → 'thermometer'
+  Yield / Harvest    → 'barley'
+  Equipment          → 'tractor'
+  Reports / Chart    → 'chart-line'
+  Alerts / Warning   → 'alert-circle-outline'
+  Calendar / Tasks   → 'calendar-check-outline'
+  Livestock          → 'cow'
+  Fertilizer         → 'flower-outline'
+  Soil               → 'terrain'
+  Drone              → 'quadcopter'
+  Settings           → 'cog-outline'
+  Profile / User     → 'account-circle-outline'
+  Notifications      → 'bell-outline'
+  Back arrow         → 'arrow-left'
+  Close              → 'close'
+  Add                → 'plus-circle-outline'
+  Search             → 'magnify'
+  Success            → 'check-circle-outline'
+
+Default icon props:
+  size={22} color={Colors.primary}
+
+For tab bar icons use size={24}.
+For inline/small use size={18}.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMPONENT STYLES — apply consistently
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Buttons (use Paper Button or TouchableOpacity):
+  Primary:   bg=#3D7A4F, text=white, borderRadius=12, paddingVertical=14
+  Secondary: bg=#82C341, text=white, borderRadius=12
+  Outlined:  bg=transparent, border=2px #3D7A4F, text=#3D7A4F, borderRadius=12
+  Ghost:     bg=transparent, text=#3D7A4F, no border
+  Danger:    bg=#E05252, text=white, borderRadius=12
+
+Cards:
+  bg=white, borderRadius=16, padding=16,
+  shadowColor='#000', shadowOpacity=0.06, shadowRadius=10, elevation=3
+
+Inputs (Paper TextInput mode="outlined"):
+  activeOutlineColor={Colors.primary}
+  outlineColor={Colors.border}
+  backgroundColor={Colors.bg}
+  borderRadius=10
+
+Status badges (inline tags):
+  Healthy:    bg='#82C34122', text=#5A8E28, borderRadius=99
+  Warning:    bg='#F4A62322', text=#9B6200, borderRadius=99
+  Critical:   bg='#E0525222', text=#B03030, borderRadius=99
+
+Dividers: height=1, bg=Colors.border, marginVertical=12
+
+Screen background: always Colors.bg = '#F9FBF7'
+Card surface: always Colors.surface = '#FFFFFF'
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FINAL CHECKLIST — verify before done
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+□ No default React Navigation header visible on any screen
+□ StatusBar is light content on bg color, not dark native bar
+□ All screens use Colors.bg as background (not white, not grey)
+□ All icons are MaterialCommunityIcons, no mixed icon libraries
+□ PaperProvider wraps the entire app with paperTheme
+□ No hardcoded color strings (#fff, 'white', 'green', etc.) remain
+□ Font family Outfit applied to all Text components
+□ Cards have borderRadius=16 and soft shadow (elevation 3)
+□ Primary buttons have a subtle shadow: 
+    shadowColor=Colors.primary, shadowOpacity=0.3, elevation=4
+□ Tab bar (if present): bg=white, active=Colors.primary, 
+    inactive=Colors.textMuted, no top border
+```
+
+---
+
+**On the top bar issue** — you're right, it's a common mistake. The default React Navigation header looks like a browser/web pattern. Real mobile apps either hide it entirely and design the greeting/title as part of the screen content (like WhatsApp, Instagram, Grab), or use a very minimal custom one with no background box. The prompt above sets `headerShown: false` everywhere and shows the correct inline back-button pattern for inner screens.

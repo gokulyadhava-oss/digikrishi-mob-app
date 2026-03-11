@@ -6,14 +6,11 @@ import Animated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
+import { Colors } from '@/constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const LOADING_DURATION_MS = 3000;
-const BRAND_COLOR = '#5EE890';
-const BRAND_DIM = 'rgba(94,232,144,0.55)';
-const SOIL_DARK = '#060E08';
-const SUBTLE = 'rgba(224,255,236,0.38)';
 
 export function LoadingScreen({
   onFinish,
@@ -92,7 +89,7 @@ export function LoadingScreen({
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: SOIL_DARK,
+    backgroundColor: Colors.bg,
     zIndex: 9999,
     justifyContent: 'center',
     alignItems: 'center',
@@ -119,27 +116,27 @@ const styles = StyleSheet.create({
   brandTag: {
     fontSize: 10,
     letterSpacing: 3,
-    color: BRAND_DIM,
+    color: Colors.textMuted,
     textTransform: 'uppercase',
   },
   brandName: {
     fontSize: 32,
     fontWeight: '700',
     letterSpacing: 4,
-    color: BRAND_COLOR,
+    color: Colors.primary,
     textTransform: 'uppercase',
   },
   divider: {
     width: 100,
     height: 1,
-    backgroundColor: 'rgba(61,184,106,0.5)',
+    backgroundColor: Colors.border,
     marginVertical: 4,
   },
   brandSub: {
     fontSize: 11,
     fontWeight: '300',
     letterSpacing: 2,
-    color: SUBTLE,
+    color: Colors.textMuted,
     textTransform: 'uppercase',
   },
   loaderWrap: {
@@ -153,23 +150,23 @@ const styles = StyleSheet.create({
   },
   loaderLabel: {
     fontSize: 11,
-    color: BRAND_DIM,
+    color: Colors.textMuted,
     letterSpacing: 1,
   },
   loaderPct: {
     fontSize: 11,
-    color: BRAND_COLOR,
+    color: Colors.primary,
     fontWeight: '700',
   },
   loaderTrack: {
     height: 3,
-    backgroundColor: 'rgba(61,184,106,0.25)',
+    backgroundColor: Colors.border,
     borderRadius: 2,
     overflow: 'hidden',
   },
   loaderFill: {
     height: '100%',
-    backgroundColor: BRAND_COLOR,
+    backgroundColor: Colors.primary,
     borderRadius: 2,
   },
 });

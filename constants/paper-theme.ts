@@ -1,43 +1,27 @@
-import { MD3LightTheme, MD3DarkTheme } from 'react-native-paper';
+import { MD3LightTheme } from 'react-native-paper';
+import { Colors } from './theme';
 
-const primaryGreen = '#15803d';
-const primaryGreenDark = '#22c55e';
-
-/** Premium dark palette for cards (Basic details, Address, Bank details). */
-const cardPremiumDark = {
-  background: '#14181c',
-  border: '#2d333b',
-  surface: '#14181c',
-  surfaceVariant: '#1c2128',
-  outline: '#373e47',
-  onSurface: '#e6edf3',
-  onSurfaceVariant: '#8b949e',
-};
-
-export const paperLightTheme = {
+export const paperTheme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
-    primary: primaryGreen,
-    primaryContainer: '#dcfce7',
-    surface: '#f0fdf4',
-    surfaceVariant: '#f0fdf4',
-    outline: '#bbf7d0',
+    primary: Colors.primary,
+    secondary: Colors.secondary,
+    background: Colors.bg,
+    surface: Colors.surface,
+    onPrimary: Colors.onPrimary,
+    onSecondary: Colors.onSecondary,
+    onBackground: Colors.text,
+    onSurface: Colors.text,
+    outline: Colors.border,
+    error: Colors.danger,
+    surfaceVariant: Colors.surfaceVariant,
+    onSurfaceVariant: Colors.textMuted,
   },
 };
 
-export const paperDarkTheme = {
-  ...MD3DarkTheme,
-  colors: {
-    ...MD3DarkTheme.colors,
-    primary: primaryGreenDark,
-    primaryContainer: '#14532d',
-    surface: cardPremiumDark.surface,
-    surfaceVariant: cardPremiumDark.surfaceVariant,
-    outline: cardPremiumDark.outline,
-    surfaceDisabled: cardPremiumDark.surfaceVariant,
-    onSurface: cardPremiumDark.onSurface,
-    onSurfaceVariant: cardPremiumDark.onSurfaceVariant,
-    outlineVariant: cardPremiumDark.border,
-  },
-};
+/** @deprecated Use paperTheme. Kept for compatibility. */
+export const paperLightTheme = paperTheme;
+
+/** @deprecated Use paperTheme. Kept for compatibility. */
+export const paperDarkTheme = paperTheme;

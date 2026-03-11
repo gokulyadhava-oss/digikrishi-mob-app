@@ -363,13 +363,14 @@ export default function AddFarmerScreen() {
 }
 
 const premiumDarkCard = {
-  backgroundColor: '#14181c',
+  backgroundColor: Colors.surface,
   borderWidth: 1,
-  borderColor: '#2d333b',
+  borderColor: Colors.border,
+  borderRadius: 16,
 };
 
 const styles = StyleSheet.create({
-  kav: { flex: 1 },
+  kav: { flex: 1, backgroundColor: Colors.bg },
   scroll: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 40 },
   card: { marginBottom: 16 },

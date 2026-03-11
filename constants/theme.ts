@@ -1,84 +1,82 @@
-/**
- * Theme aligned with khetibuddy-fe (same CSS / design tokens).
- * Primary green, muted backgrounds, and matching light/dark.
- */
-
 import { Platform } from 'react-native';
 
-const tintColorLight = '#15803d';
-const tintColorDark = '#4ade80';
+/**
+ * Fresh Growth AgriTech design tokens.
+ * Use these instead of hardcoded colors everywhere.
+ */
 
-export const Colors = {
-  /** Premium dark green gradient for card headers – readable light text. */
+const tokens = {
+  primary: '#3D7A4F',
+  primaryLight: '#5FA870',
+  primaryDark: '#245533',
+  secondary: '#82C341',
+  secondaryLight: '#A5DA6B',
+  secondaryDark: '#5A8E28',
+  bg: '#F9FBF7',
+  surface: '#FFFFFF',
+  text: '#1B2A1E',
+  textMuted: '#607060',
+  border: '#E4EDE6',
+  danger: '#E05252',
+  warning: '#F4A623',
+  healthyBg: '#82C34122',
+  healthyText: '#5A8E28',
+  warningBg: '#F4A62322',
+  warningText: '#9B6200',
+  criticalBg: '#E0525222',
+  criticalText: '#B03030',
+  surfaceVariant: '#EDF3EF',
+  onPrimary: '#FFFFFF',
+  onSecondary: '#FFFFFF',
+  /** Modal overlay */
+  overlay: 'rgba(0,0,0,0.45)',
+  overlayDark: 'rgba(0,0,0,0.85)',
+  /** Shadow for cards/elevation */
+  shadow: '#000000',
+  /** Card header gradient (e.g. greeting, profile block) */
   cardHeaderGreen: {
-    gradientStart: '#0d2818',
-    gradientEnd: '#051009',
-    text: '#f0fdf4',
-    icon: '#a7f3d0',
-  },
-  light: {
-    text: '#1a1a1a',
-    background: '#f8faf8',
-    tint: tintColorLight,
-    icon: '#525252',
-    tabIconDefault: '#737373',
-    tabIconSelected: tintColorLight,
-    border: '#e5e5e5',
-    muted: '#a3a3a3',
-    mutedForeground: '#737373',
-    card: '#f0fdf4',
-    cardBorder: '#bbf7d0',
-    emeraldBorder: '#059669',
-    primary: '#15803d',
-    primaryForeground: '#fafafa',
-    destructive: '#dc2626',
-  },
-  dark: {
-    text: '#fafafa',
-    background: '#0c1510',
-    tint: tintColorDark,
-    icon: '#a3a3a3',
-    tabIconDefault: '#737373',
-    tabIconSelected: tintColorDark,
-    border: '#404040',
-    muted: '#3f3f46',
-    mutedForeground: '#a1a1aa',
-    card: '#14532d',
-    /** Emerald border for cards – same intent in light/dark */
-    cardBorder: '#166534',
-    emeraldBorder: '#10b981',
-    primary: '#22c55e',
-    primaryForeground: '#fafafa',
-    destructive: '#ef4444',
-  },
-  /** Premium dark palette for Card blocks (Basic details, Address, Bank details). */
-  cardPremiumDark: {
-    background: '#14181c',
-    border: '#2d333b',
-    surfaceVariant: '#1c2128',
-    outline: '#373e47',
-    onSurface: '#e6edf3',
-    onSurfaceVariant: '#8b949e',
+    gradientStart: '#245533',
+    gradientEnd: '#3D7A4F',
+    text: '#FFFFFF',
+    icon: '#E4EDE6',
+    subtitle: 'rgba(240,253,244,0.85)',
+    pillBg: 'rgba(255,255,255,0.18)',
   },
 };
 
+const schemeLight = {
+  text: tokens.text,
+  background: tokens.bg,
+  tint: tokens.primary,
+  icon: tokens.textMuted,
+  tabIconDefault: tokens.textMuted,
+  tabIconSelected: tokens.primary,
+  border: tokens.border,
+  muted: tokens.textMuted,
+  mutedForeground: tokens.textMuted,
+  card: tokens.surface,
+  cardBorder: tokens.border,
+  emeraldBorder: tokens.secondary,
+  primary: tokens.primary,
+  primaryForeground: tokens.onPrimary,
+  destructive: tokens.danger,
+};
+
+/** Design tokens + .light / .dark for useColorScheme(). */
+export const Colors = {
+  ...tokens,
+  light: schemeLight,
+  dark: schemeLight,
+};
+
+/** Platform font families; use Typography.fontFamily (Outfit) for design system. */
 export const Fonts = Platform.select({
-  ios: {
-    sans: 'system-ui',
-    serif: 'ui-serif',
-    rounded: 'ui-rounded',
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
+  ios: { sans: 'System', serif: 'Georgia', rounded: 'System', mono: 'Menlo' },
+  default: { sans: 'normal', serif: 'serif', rounded: 'normal', mono: 'monospace' },
   web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+    rounded: 'normal',
+    mono: "'SF Mono', Consolas, monospace",
   },
 });

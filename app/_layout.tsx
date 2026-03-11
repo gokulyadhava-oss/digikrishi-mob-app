@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -30,29 +30,17 @@ if (typeof ErrorUtils !== 'undefined' && ErrorUtils.setGlobalHandler) {
 }
 
 import { AuthProvider } from '@/contexts/auth-context';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
-import { paperLightTheme, paperDarkTheme } from '@/constants/paper-theme';
+import { paperTheme } from '@/constants/paper-theme';
 
 const LightTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    primary: Colors.light.primary,
-    background: Colors.light.background,
-    text: Colors.light.text,
-    border: Colors.light.border,
-  },
-};
-
-const CustomDarkTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    primary: Colors.dark.primary,
-    background: Colors.dark.background,
-    text: Colors.dark.text,
-    border: Colors.dark.border,
+    primary: Colors.primary,
+    background: Colors.bg,
+    text: Colors.text,
+    border: Colors.border,
   },
 };
 
@@ -61,8 +49,6 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const paperTheme = colorScheme === 'dark' ? paperDarkTheme : paperLightTheme;
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
 
   useEffect(() => {
@@ -73,18 +59,11 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <PaperProvider theme={paperTheme}>
-          <ThemeProvider value={colorScheme === 'dark' ? CustomDarkTheme : LightTheme}>
-            <View style={{ flex: 1 }}>
+          <ThemeProvider value={LightTheme}>
+            <View style={{ flex: 1, backgroundColor: Colors.bg }}>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="(tabs)" />
-                <Stack.Screen
-                  name="farmer/[id]"
-                  options={{
-                    headerShown: true,
-                    title: 'Farmer',
-                    headerBackTitle: 'Back',
-                  }}
-                />
+                <Stack.Screen name="farmer/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="login" options={{ headerShown: false }} />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
               </Stack>
@@ -92,7 +71,7 @@ export default function RootLayout() {
                 <LoadingScreen onFinish={() => setShowLoadingScreen(false)} />
               )}
             </View>
-            <StatusBar style="light" />
+            <StatusBar style="dark" backgroundColor={Colors.bg} />
           </ThemeProvider>
         </PaperProvider>
       </AuthProvider>

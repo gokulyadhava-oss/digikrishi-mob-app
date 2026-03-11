@@ -27,8 +27,7 @@ import {
 } from '@/lib/api';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
@@ -141,16 +140,19 @@ export default function HomeScreen() {
     return (
       <>
         <ScrollView
-          style={styles.scroll}
+          style={[styles.scroll, { backgroundColor: Colors.bg }]}
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
+          <View style={[styles.topBar, { backgroundColor: Colors.bg }]}>
+            <Image source={require('@/assets/images/digi-prishi-logo.webp')} style={styles.topBarLogo} resizeMode="contain" />
+          </View>
           <View style={styles.header}>
             <View style={styles.profileImageWrap}>
               {profilePic ? (
                 <Image source={{ uri: profilePic }} style={styles.profileImage} resizeMode="cover" />
               ) : (
                 <View style={[styles.profileImagePlaceholder, { backgroundColor: colors.muted }]}>
-                  <IconSymbol name="person.fill" size={40} color={colors.background} />
+                  <MaterialCommunityIcons name="account-circle-outline" size={40} color={colors.background} />
                 </View>
               )}
             </View>
@@ -173,7 +175,7 @@ export default function HomeScreen() {
                 borderRadius: 9,
                 backgroundColor: colors.card,
                 transform: [{ translateX: farmerTabAnim }],
-                shadowColor: '#000',
+                shadowColor: Colors.shadow,
                 shadowOffset: { width: 0, height: 1 },
                 shadowOpacity: 0.08,
                 shadowRadius: 4,
@@ -310,9 +312,12 @@ export default function HomeScreen() {
       : assignedFarmers;
     return (
       <ScrollView
-        style={styles.scroll}
+        style={[styles.scroll, { backgroundColor: Colors.bg }]}
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
+        <View style={[styles.topBar, { backgroundColor: Colors.bg }]}>
+          <Image source={require('@/assets/images/digi-prishi-logo.webp')} style={styles.topBarLogo} resizeMode="contain" />
+        </View>
         <View style={[styles.helloCard, { borderColor: colors.emeraldBorder ?? colors.cardBorder }]}>
           <LinearGradient
             colors={[gradientStart, gradientEnd]}
@@ -349,8 +354,8 @@ export default function HomeScreen() {
                 hitSlop={8}
                 accessibilityLabel="Search farmers"
                 accessibilityRole="button">
-                <IconSymbol
-                  name={searchVisible ? 'xmark.circle.fill' : 'magnifyingglass'}
+                <MaterialCommunityIcons
+                  name={searchVisible ? 'close' : 'magnify'}
                   size={24}
                   color={Colors.cardHeaderGreen.text}
                 />
@@ -359,7 +364,7 @@ export default function HomeScreen() {
           </View>
           {searchVisible && (
             <View style={[styles.searchInputWrap, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <IconSymbol name="magnifyingglass" size={20} color={colors.mutedForeground} />
+              <MaterialCommunityIcons name="magnify" size={20} color={colors.mutedForeground} />
               <TextInput
                 style={[styles.searchInput, { color: colors.text, backgroundColor: colors.background }]}
                 placeholder="Search by name, code, village..."
@@ -372,7 +377,7 @@ export default function HomeScreen() {
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
-                  <IconSymbol name="xmark.circle.fill" size={20} color={colors.mutedForeground} />
+                  <MaterialCommunityIcons name="close" size={20} color={colors.mutedForeground} />
                 </TouchableOpacity>
               )}
             </View>
@@ -394,7 +399,7 @@ export default function HomeScreen() {
                   onPress={() => router.push(`/farmer/${f.id}`)}
                   activeOpacity={0.7}>
                   <View style={[styles.farmerCardIconWrap, { backgroundColor: `${colors.primary}22` }]}>
-                    <SimpleLineIcons name="user-following" size={20} color={colors.primary} />
+                    <MaterialCommunityIcons name="account-outline" size={20} color={colors.primary} />
                   </View>
                   <View style={styles.farmerCardBody}>
                     <ThemedText style={styles.farmerName}>{f.name}</ThemedText>
@@ -459,6 +464,15 @@ function DetailRow({
   );
 }
 
+const INFO_CARD_ICONS: Record<string, 'account-circle-outline' | 'map-marker-outline' | 'account-group' | 'cash' | 'file-document-outline' | 'account-plus-outline'> = {
+  'person.fill': 'account-circle-outline',
+  'mappin.circle.fill': 'map-marker-outline',
+  'person.3.fill': 'account-group',
+  'banknote.fill': 'cash',
+  'doc.fill': 'file-document-outline',
+  'person.badge.plus': 'account-plus-outline',
+};
+
 function InfoCard({
   title,
   icon,
@@ -472,15 +486,20 @@ function InfoCard({
 }) {
   const { gradientStart, gradientEnd, text: headerText, icon: headerIcon } = Colors.cardHeaderGreen;
   const cardBorderColor = colors.emeraldBorder ?? colors.cardBorder ?? colors.border;
+  const mciName = INFO_CARD_ICONS[icon] ?? 'circle-outline';
   return (
     <View
       style={{
         backgroundColor: colors.card,
-        borderRadius: 12,
+        borderRadius: 16,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: cardBorderColor,
         marginBottom: 8,
+        shadowColor: Colors.shadow,
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+        elevation: 3,
       }}>
       <LinearGradient
         colors={[gradientStart, gradientEnd]}
@@ -493,7 +512,7 @@ function InfoCard({
           paddingHorizontal: 12,
           paddingVertical: 8,
         }}>
-        <IconSymbol name={icon} size={12} color={headerIcon} />
+        <MaterialCommunityIcons name={mciName} size={18} color={headerIcon} />
         <ThemedText
           style={{
             fontSize: 11,
@@ -519,6 +538,15 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flex: 1,
+  },
+  topBar: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  topBarLogo: {
+    height: 32,
+    width: 110,
   },
   scrollContent: {
     padding: 12,
@@ -555,7 +583,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   helloCard: {
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 10,
     borderWidth: 1,
@@ -581,12 +609,12 @@ const styles = StyleSheet.create({
   },
   helloMetaText: {
     fontSize: 11,
-    color: 'rgba(240,253,244,0.85)',
+    color: Colors.cardHeaderGreen.subtitle,
     flex: 1,
     minWidth: 0,
   },
   helloPill: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: Colors.cardHeaderGreen.pillBg,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -597,7 +625,7 @@ const styles = StyleSheet.create({
     color: Colors.cardHeaderGreen.text,
   },
   assignedCard: {
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 10,
   },
