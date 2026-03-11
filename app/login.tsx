@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { Colors } from '@/constants/theme';
 import Svg, { Path, Circle, Line, Ellipse, Rect, Defs, LinearGradient, Stop } from 'react-native-svg';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 // ─── Farmer doodle ────────────────────────────────────────────────────────────
 function FarmerDoodle() {
@@ -233,9 +234,8 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── Doodle ───────────────────────────────────────────────────── */}
+          {/* ── Doodle (lateral, from top) ────────────────────────────────── */}
           <View style={styles.doodleWrap}>
-            <FarmerDoodle />
             <View style={styles.logoPill}>
               <Image
                 source={require('@/assets/images/digi-prishi-logo.webp')}
@@ -245,6 +245,9 @@ export default function LoginScreen() {
               <Text variant="titleMedium" style={styles.logoText}>
                 Digi Krishi
               </Text>
+            </View>
+            <View style={styles.doodleBox}>
+              <FarmerDoodle />
             </View>
           </View>
 
@@ -385,9 +388,12 @@ export default function LoginScreen() {
             {/* ══ AGENT ════════════════════════════════════════════════════ */}
             {screen === SCREENS.AGENT && (
               <>
-                <Text variant="headlineSmall" style={[styles.title, { color: onSurface }]}>
-                  Agent login
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <MaterialCommunityIcons name="face-agent" size={28} color={Colors.primary} />
+                  <Text variant="headlineSmall" style={[styles.title, { color: onSurface }]}>
+                    Agent login
+                  </Text>
+                </View>
                 <Text variant="bodyMedium" style={[styles.subtitle, { color: onSurfaceVariant }]}>
                   Email and password
                 </Text>
@@ -467,30 +473,37 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
 
-  // ── Doodle ──
+  // ── Doodle (lateral, from top) ──
   doodleWrap: {
-    height: 190,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
     backgroundColor: Colors.bg,
-    position: 'relative',
+    minHeight: 140,
   },
   logoPill: {
-    position: 'absolute',
-    bottom: -18,
-    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: Colors.surface,
-    borderWidth: 2.5,
-    borderColor: Colors.bg,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    elevation: 5,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  doodleBox: {
+    flex: 1,
+    height: 120,
+    marginLeft: 12,
   },
   logoImg: {
     width: 28,

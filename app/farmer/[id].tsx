@@ -52,7 +52,7 @@ const T = {
   surface:      '#FFFFFF',
   text:         '#1B2A1E',
   textMuted:    '#607060',
-  border:       '#E4EDE6',
+  border:       '#D0DDD4',
   headerTint:   '#EDF7EF',   // very subtle green for section headers
   danger:       '#E05252',
 };

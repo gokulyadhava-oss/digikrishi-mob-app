@@ -9,7 +9,7 @@ SplashScreen.preventAutoHideAsync();
 
 import { LoadingScreen } from '@/components/loading-screen';
 import { PaperProvider } from 'react-native-paper';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { registerTranslation, en } from 'react-native-paper-dates';
 import 'react-native-reanimated';
 
@@ -60,18 +60,20 @@ export default function RootLayout() {
       <AuthProvider>
         <PaperProvider theme={paperTheme}>
           <ThemeProvider value={LightTheme}>
-            <View style={{ flex: 1, backgroundColor: Colors.bg }}>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="farmer/[id]" options={{ headerShown: false }} />
-                <Stack.Screen name="login" options={{ headerShown: false }} />
-                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-              </Stack>
-              {showLoadingScreen && (
-                <LoadingScreen onFinish={() => setShowLoadingScreen(false)} />
-              )}
-            </View>
-            <StatusBar style="dark" backgroundColor={Colors.bg} />
+            <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bg }} edges={['top']}>
+              <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="farmer/[id]" options={{ headerShown: false }} />
+                  <Stack.Screen name="login" options={{ headerShown: false }} />
+                  <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+                </Stack>
+                {showLoadingScreen && (
+                  <LoadingScreen onFinish={() => setShowLoadingScreen(false)} />
+                )}
+              </View>
+              <StatusBar style="dark" backgroundColor={Colors.bg} />
+            </SafeAreaView>
           </ThemeProvider>
         </PaperProvider>
       </AuthProvider>

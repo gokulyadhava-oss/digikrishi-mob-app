@@ -16,7 +16,7 @@ const tokens = {
   surface: '#FFFFFF',
   text: '#1B2A1E',
   textMuted: '#607060',
-  border: '#E4EDE6',
+  border: '#D0DDD4',
   danger: '#E05252',
   warning: '#F4A623',
   healthyBg: '#82C34122',
