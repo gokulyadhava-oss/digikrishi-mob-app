@@ -469,6 +469,25 @@ export default function FarmerDetailScreen() {
           {/* ── PLOT ────────────────────────────────────────────────────── */}
           {activeTab === 'plot' && (
             <View style={S.tabContent}>
+
+              {/* Maize crop banner */}
+              <View style={S.maizeBanner}>
+                <Image
+                  source={require('@/assets/images/maize-pic.jpg')}
+                  style={S.maizeBannerImg}
+                  resizeMode="cover"
+                />
+                <View style={S.maizeBannerOverlay}>
+                  <View style={S.maizeBannerTextCol}>
+                    <Text style={S.maizeBannerCrop}>🌽 Maize</Text>
+                    <Text style={S.maizeBannerSeason}>Kharif Season</Text>
+                  </View>
+                  <View style={S.maizeBannerBadge}>
+                    <Text style={S.maizeBannerBadgeText}>Current Crop</Text>
+                  </View>
+                </View>
+              </View>
+
               {/* Add plot button */}
               <TouchableOpacity
                 style={S.addPlotBtn}
@@ -492,12 +511,20 @@ export default function FarmerDetailScreen() {
                   {plots.map((plot) => {
                     const season  = plot.season ?? '—';
                     const variety = plot.variety ?? '—';
-                    const size    = plot.land_size_value != null
-                      ? `${plot.land_size_value} ${plot.units ?? ''}`.trim()
+                    const bigha   = plot.land_size_value != null
+                      ? (() => {
+                          const v = plot.land_size_value;
+                          const u = plot.units ?? '';
+                          if (!u || u === 'Bigha') return `${v} Bigha`;
+                          if (u === 'Acre')    return `${Math.round(v * 4046.86 / 2500 * 100) / 100} Bigha`;
+                          if (u === 'Hectare') return `${Math.round(v * 10000  / 2500 * 100) / 100} Bigha`;
+                          if (u === 'Guntha')  return `${Math.round(v * 101.17 / 2500 * 100) / 100} Bigha`;
+                          return `${v} ${u}`;
+                        })()
                       : null;
                     const loc     = [plot.taluka, plot.district].filter(Boolean).join(', ');
                     const plotTitle = `${season} · ${variety}`;
-                    const plotMeta  = [size, loc].filter(Boolean).join(' · ');
+                    const plotMeta  = [bigha, loc].filter(Boolean).join(' · ');
 
                     const goToPlot = () => router.push({
                       pathname: '/plot/[id]',
@@ -511,8 +538,12 @@ export default function FarmerDetailScreen() {
                         onPress={goToPlot}
                         activeOpacity={0.85}
                       >
-                        {/* Left green accent */}
-                        <View style={S.plotChipAccent} />
+                        {/* Maize thumbnail */}
+                        <Image
+                          source={require('@/assets/images/maize-pic.jpg')}
+                          style={S.plotChipThumb}
+                          resizeMode="cover"
+                        />
 
                         <View style={S.plotChipBody}>
                           {/* Top row: title + delete */}
@@ -529,10 +560,10 @@ export default function FarmerDetailScreen() {
 
                           {/* Meta chips row */}
                           <View style={S.plotChipMeta}>
-                            {size && (
-                              <View style={S.metaChip}>
-                                <MaterialCommunityIcons name="terrain" size={11} color={T.primary} />
-                                <Text style={S.metaChipText}>{size}</Text>
+                            {bigha && (
+                              <View style={[S.metaChip, S.metaChipBigha]}>
+                                <MaterialCommunityIcons name="ruler-square" size={11} color={T.primary} />
+                                <Text style={[S.metaChipText, { color: T.primary, fontWeight: '700' }]}>{bigha}</Text>
                               </View>
                             )}
                             {loc ? (
@@ -551,7 +582,7 @@ export default function FarmerDetailScreen() {
                         </View>
 
                         {/* Arrow */}
-                        <MaterialCommunityIcons name="chevron-right" size={18} color={T.border} />
+                        <MaterialCommunityIcons name="chevron-right" size={18} color={T.border} style={{ marginRight: 8 }} />
                       </TouchableOpacity>
                     );
                   })}
@@ -778,6 +809,52 @@ const S = StyleSheet.create({
     backgroundColor: T.headerTint,
   },
   uploadChipText: { fontSize: 12, fontWeight: '600', color: T.primary },
+
+  // ── Maize banner ──
+  maizeBanner: {
+    width: '100%',
+    height: 110,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  maizeBannerImg: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
+  maizeBannerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  maizeBannerTextCol: { gap: 2 },
+  maizeBannerCrop:    { fontSize: 20, fontWeight: '900', color: '#fff' },
+  maizeBannerSeason:  { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
+  maizeBannerBadge: {
+    backgroundColor: 'rgba(130,195,65,0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 99,
+  },
+  maizeBannerBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
+
+  // ── Plot chip thumbnail ──
+  plotChipThumb: {
+    width: 56,
+    height: '100%',
+    minHeight: 68,
+  },
+
+  metaChipBigha: {
+    backgroundColor: T.headerTint,
+    borderWidth: 1,
+    borderColor: T.primary + '40',
+  },
 
   // ── Plot ──
   addPlotBtn: {

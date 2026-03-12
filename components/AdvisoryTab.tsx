@@ -202,7 +202,7 @@ function AccordionItem({ advisory, daysSinceSowing }: { advisory: Advisory; days
 }
 
 // ─── Current Advisory Hero Card ───────────────────────────────────────────────
-function CurrentAdvisoryCard({ advisory }: { advisory: Advisory }) {
+export function CurrentAdvisoryCard({ advisory }: { advisory: Advisory }) {
   const meta = getActivityMeta(advisory.activity);
   const specLines = advisory.specifications?.text ? parseSteps(advisory.specifications.text) : [];
   const stepLines = advisory.steps?.text ? parseSteps(advisory.steps.text) : [];
@@ -219,6 +219,8 @@ function CurrentAdvisoryCard({ advisory }: { advisory: Advisory }) {
         </View>
         <View style={styles.currentCardHeaderText}>
           <View style={styles.currentNowBadge}>
+            <View style={styles.currentNowDot} />
+            <Text style={styles.currentNowLabel}>ACTIVE NOW</Text>
           </View>
           <Text style={styles.currentCardActivity}>{advisory.activity}</Text>
           <Text style={styles.currentCardStage}>{advisory.stage_name}</Text>
@@ -278,7 +280,7 @@ function CurrentAdvisoryCard({ advisory }: { advisory: Advisory }) {
 }
 
 // ─── Day Progress Bar ─────────────────────────────────────────────────────────
-function DayProgressBar({ daysSinceSowing, totalDays = 120 }: { daysSinceSowing: number; totalDays?: number }) {
+export function DayProgressBar({ daysSinceSowing, totalDays = 120 }: { daysSinceSowing: number; totalDays?: number }) {
   const progress = Math.min(daysSinceSowing / totalDays, 1);
   const widthAnim = useRef(new Animated.Value(0)).current;
 
