@@ -426,9 +426,23 @@ export interface CropAdvisoryRecord {
   is_current_period?: boolean;
 }
 
+export interface WeatherSummary {
+  temperature_c: number | null;
+  humidity: number | null;
+  description: string | null;
+  icon: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  location_name: string | null;
+  // raw payload from OpenWeather; structure not guaranteed
+  raw?: any;
+}
+
 export interface PlotAdvisoriesResponse {
   days_since_sowing: number | null;
   advisories: CropAdvisoryRecord[];
+  /** Optional weather summary (present for agent + farmer plot advisories when weather is configured). */
+  weather?: WeatherSummary | null;
 }
 
 /** Logged-in farmer: fetch advisories for one of their plots. */

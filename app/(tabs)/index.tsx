@@ -77,15 +77,27 @@ function mapToAdvisory(raw: CropAdvisoryRecord, daysSinceSowing: number | null):
   };
 }
 
+function formatLocationLabel(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const first = raw.split(',').map((p) => p.trim()).filter(Boolean)[0];
+  return first || null;
+}
+
 type FarmerTabKey = 'details' | 'plot' | 'tasks';
 
 interface TasksEntry {
   plot: FarmerPlotRecord;
   currentAdvisories: Advisory[];
   daysSinceSowing: number | null;
+  weather?: {
+    temperature_c: number | null;
+    description: string | null;
+    humidity: number | null;
+    location_name: string | null;
+  } | null;
 }
 
-export default function HomeScreen() {
+export function FarmerHomeScreen({ initialFarmerTab = 'details' as FarmerTabKey }: { initialFarmerTab?: FarmerTabKey }) {
   const { user, logout } = useAuth();
   const router = useRouter();
 
@@ -96,7 +108,7 @@ export default function HomeScreen() {
   const [refreshing,     setRefreshing]     = useState(false);
   const [searchQuery,    setSearchQuery]    = useState('');
   const [searchVisible,  setSearchVisible]  = useState(false);
-  const [farmerTab,      setFarmerTab]      = useState<FarmerTabKey>('details');
+  const [farmerTab,      setFarmerTab]      = useState<FarmerTabKey>(initialFarmerTab);
   const [plots,          setPlots]          = useState<FarmerPlotRecord[]>([]);
   const [plotsLoading,   setPlotsLoading]   = useState(false);
   const [tasksData,      setTasksData]      = useState<TasksEntry[]>([]);
@@ -172,9 +184,21 @@ export default function HomeScreen() {
             const res = await fetchMyPlotAdvisories(plot.id);
             const all = (res.advisories ?? []).map((a) => mapToAdvisory(a, res.days_since_sowing));
             const current = all.filter((a) => a.is_current_period);
-            return { plot, currentAdvisories: current, daysSinceSowing: res.days_since_sowing };
+            return {
+              plot,
+              currentAdvisories: current,
+              daysSinceSowing: res.days_since_sowing,
+              weather: res.weather
+                ? {
+                    temperature_c: res.weather.temperature_c,
+                    description: res.weather.description,
+                    humidity: res.weather.humidity ?? null,
+                    location_name: res.weather.location_name ?? null,
+                  }
+                : null,
+            };
           } catch {
-            return { plot, currentAdvisories: [], daysSinceSowing: null };
+            return { plot, currentAdvisories: [], daysSinceSowing: null, weather: null };
           }
         })
       );
@@ -218,12 +242,6 @@ export default function HomeScreen() {
     const docs    = farmer?.FarmerDoc;
     const agent   = farmer?.FarmerAgentMaps?.[0]?.Agent;
 
-    const FARMER_TABS: { key: FarmerTabKey; label: string }[] = [
-      { key: 'details', label: 'Details' },
-      { key: 'plot',    label: 'Plot' },
-      { key: 'tasks',   label: 'Tasks' },
-    ];
-
     return (
       <>
         <ScrollView
@@ -231,7 +249,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.primary} />}>
 
-          {/* Hero card */}
+          {/* Hero card + logout for farmer */}
           <View style={styles.heroCard}>
             <View style={styles.heroRow}>
               {profilePicUrl ? (
@@ -241,7 +259,7 @@ export default function HomeScreen() {
                   <MaterialCommunityIcons name="account" size={32} color={T.textMuted} />
                 </View>
               )}
-              <View>
+              <View style={{ flex: 1, gap: 4 }}>
                 <Text style={styles.heroName}>{farmer?.name ?? '—'}</Text>
                 <Text style={styles.heroCode}>{farmer?.farmer_code ?? '—'}</Text>
                 <View style={[styles.statusChip, (farmer as { is_activated?: boolean })?.is_activated && styles.statusChipActive]}>
@@ -250,35 +268,15 @@ export default function HomeScreen() {
                   </Text>
                 </View>
               </View>
-            </View>
-          </View>
-
-          {/* Tab bar — 3 tabs */}
-          <View style={styles.farmerTabBar}>
-            <Animated.View
-              style={[
-                styles.farmerTabSlider,
-                {
-                  width: FARMER_TAB_WIDTH - 6,
-                  transform: [{ translateX: farmerTabAnim }],
-                },
-              ]}
-            />
-            {FARMER_TABS.map(({ key, label }, index) => (
               <TouchableOpacity
-                key={key}
-                style={styles.farmerTabTouch}
-                onPress={() => handleFarmerTabPress(key, index)}
-                activeOpacity={0.7}>
-                <Text
-                  style={[
-                    styles.farmerTabLabel,
-                    { color: farmerTab === key ? T.primary : T.textMuted, fontWeight: farmerTab === key ? '700' : '400' },
-                  ]}>
-                  {label}
-                </Text>
+                style={styles.logoutIconBtn}
+                onPress={logout}
+                activeOpacity={0.7}
+                accessibilityLabel="Log out"
+              >
+                <MaterialCommunityIcons name="logout-variant" size={18} color={T.textMuted} />
               </TouchableOpacity>
-            ))}
+            </View>
           </View>
 
           {/* ── Details tab ────────────────────────────────────────────────── */}
@@ -313,10 +311,6 @@ export default function HomeScreen() {
                   {agent.mobile ? <DetailRow label="Mobile" value={agent.mobile} /> : null}
                 </InfoCard>
               )}
-              <TouchableOpacity style={styles.logoutRow} onPress={logout} activeOpacity={0.7}>
-                <MaterialCommunityIcons name="logout-variant" size={16} color={T.textMuted} />
-                <Text style={styles.logoutRowText}>Log out</Text>
-              </TouchableOpacity>
             </View>
           )}
 
@@ -428,6 +422,36 @@ export default function HomeScreen() {
                           <Text style={styles.activeBadgeText}>Active</Text>
                         </View>
                       </View>
+
+                      {/* Big weather card for this plot (if available) */}
+                      {entry.weather && entry.weather.temperature_c != null && (
+                        <View style={styles.taskWeatherCard}>
+                          <View style={styles.taskWeatherLeft}>
+                            <MaterialCommunityIcons
+                              name="weather-partly-cloudy"
+                              size={28}
+                              color={T.blue}
+                            />
+                          </View>
+                          <View style={styles.taskWeatherRight}>
+                            <Text style={styles.taskWeatherLabel}>
+                              {formatLocationLabel(entry.weather.location_name) || 'Weather now'}
+                            </Text>
+                            <Text style={styles.taskWeatherTemp}>
+                              {Math.round(entry.weather.temperature_c)}°C
+                            </Text>
+                            {(entry.weather.description || entry.weather.humidity != null) && (
+                              <Text style={styles.taskWeatherMeta}>
+                                {entry.weather.description ? entry.weather.description : ''}
+                                {entry.weather.description && entry.weather.humidity != null ? ' · ' : ''}
+                                {entry.weather.humidity != null
+                                  ? `Humidity ${Math.round(entry.weather.humidity)}%`
+                                  : ''}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      )}
 
                       {/* Day progress */}
                       {entry.daysSinceSowing != null && (
@@ -575,6 +599,10 @@ export default function HomeScreen() {
   );
 }
 
+export default function HomeScreen() {
+  return <FarmerHomeScreen initialFarmerTab="details" />;
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -636,20 +664,6 @@ const styles = StyleSheet.create({
   statusChipTextActive: { color: T.primary },
 
   // Tab bar — 3-tab slider
-  farmerTabBar: {
-    flexDirection: 'row', width: '100%', marginBottom: 8,
-    padding: 3, height: 38, backgroundColor: T.bg,
-    borderRadius: 14, position: 'relative', borderWidth: 1, borderColor: T.border,
-  },
-  farmerTabSlider: {
-    position: 'absolute', top: 3, bottom: 3, left: 3,
-    borderRadius: 9, backgroundColor: T.surface,
-    borderWidth: 1, borderColor: T.border,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
-  },
-  farmerTabTouch: { flex: 1, paddingVertical: 8, alignItems: 'center', justifyContent: 'center' },
-  farmerTabLabel: { fontSize: 12 },
-
   farmerTabContent:    { width: '100%' },
   farmerDetailsCards:  { gap: 0 },
 
@@ -707,6 +721,30 @@ const styles = StyleSheet.create({
   activeBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.primary + '15', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99, borderWidth: 1, borderColor: T.primary + '30' },
   activeDot:   { width: 7, height: 7, borderRadius: 4, backgroundColor: T.secondary, shadowColor: T.secondary, shadowOpacity: 0.8, shadowRadius: 3, elevation: 2 },
   activeBadgeText: { fontSize: 11, fontWeight: '700', color: T.primary },
+  taskWeatherCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    backgroundColor: T.blueTint,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: T.blue,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  taskWeatherLeft: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  taskWeatherRight: { flex: 1 },
+  taskWeatherLabel: { fontSize: 12, letterSpacing: 0.2, color: T.blue, fontWeight: '700' },
+  taskWeatherTemp: { fontSize: 20, fontWeight: '800', color: T.text, marginTop: 2 },
+  taskWeatherMeta: { fontSize: 11, color: T.textMuted, marginTop: 2 },
   taskLabel: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   taskLabelDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: T.primary, shadowColor: T.primary, shadowOpacity: 0.6, shadowRadius: 4, elevation: 2 },
   taskLabelText: { fontSize: 12, fontWeight: '700', color: T.primary, letterSpacing: 0.4 },

@@ -324,10 +324,17 @@ export function AdvisoryTab({
   advisoriesLoading,
   advisories,
   daysSinceSowing,
+  weather,
 }: {
   advisoriesLoading: boolean;
   advisories: Advisory[];
   daysSinceSowing: number | null;
+  weather?: {
+    temperature_c: number | null;
+    humidity: number | null;
+    description: string | null;
+    location_name?: string | null;
+  } | null;
 }) {
   const currentAdvisories = advisories.filter((a) => a.is_current_period);
   const otherAdvisories   = advisories.filter((a) => !a.is_current_period);
@@ -353,6 +360,53 @@ export function AdvisoryTab({
 
   return (
     <View>
+      {/* Weather summary (if available) */}
+      {weather && (weather.temperature_c != null || weather.description) && (
+        <View style={{ marginBottom: 16 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: T.blue,
+              backgroundColor: T.blueTint,
+            }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={{ fontSize: 20 }}>☁️</Text>
+              <View>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '700',
+                    color: T.blue,
+                    letterSpacing: 0.2,
+                  }}>
+                  {weather.location_name ? weather.location_name.split(',')[0].trim() : 'Weather now'}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: '800',
+                    color: T.text,
+                  }}>
+                  {weather.temperature_c != null ? `${Math.round(weather.temperature_c)}°C` : '—'}
+                  {weather.description ? ` · ${weather.description}` : ''}
+                </Text>
+              </View>
+            </View>
+            {typeof weather.humidity === 'number' && (
+              <Text style={{ fontSize: 11, color: T.blue, fontWeight: '600' }}>
+                Humidity {Math.round(weather.humidity)}%
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
       {/* Day progress */}
       {daysSinceSowing != null && (
         <DayProgressBar daysSinceSowing={daysSinceSowing} />

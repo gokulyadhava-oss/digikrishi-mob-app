@@ -7,13 +7,20 @@ import { useAuth } from '@/contexts/auth-context';
 import { Colors } from '@/constants/theme';
 
 export default function TabLayout() {
-  const { user } = useAuth();
+  const { user, hydrated } = useAuth();
+
+  // Wait until auth state has been rehydrated from secure storage before
+  // deciding whether to redirect to the login screen.
+  if (!hydrated) {
+    return null;
+  }
 
   if (user === null) {
     return <Redirect href="/login" />;
   }
 
   const isFieldOfficer = user.role === 'FIELD_OFFICER';
+  const isFarmer = user.role === 'FARMER';
 
   return (
     <Tabs
@@ -35,8 +42,30 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="view-dashboard-outline" size={24} color={color} />
+            <MaterialCommunityIcons name="account-circle-outline" size={24} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="home-plot"
+        options={{
+          title: 'Plot',
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons name="sprout" size={24} color={color} />
+          ),
+          // Only farmers see this tab
+          href: isFarmer ? undefined : null,
+        }}
+      />
+      <Tabs.Screen
+        name="home-tasks"
+        options={{
+          title: 'Tasks',
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons name="clipboard-check-outline" size={24} color={color} />
+          ),
+          // Only farmers see this tab
+          href: isFarmer ? undefined : null,
         }}
       />
       <Tabs.Screen
@@ -46,20 +75,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="account-plus-outline" size={24} color={color} />
           ),
+          // Only field officers see this tab
           href: isFieldOfficer ? undefined : null,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="plot"
-        options={{
-          href: null,
-          headerShown: false,
         }}
       />
     </Tabs>

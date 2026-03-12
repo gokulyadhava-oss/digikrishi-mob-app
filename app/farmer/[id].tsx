@@ -124,6 +124,7 @@ export default function FarmerDetailScreen() {
   const [plots,                setPlots]                 = useState<FarmerPlotRecord[]>([]);
   const [plotsLoading,         setPlotsLoading]          = useState(false);
   const [plotFormVisible,      setPlotFormVisible]       = useState(false);
+  const [plotsExpanded,        setPlotsExpanded]         = useState(false);
 
   const screenWidth  = Dimensions.get('window').width;
   const TAB_WIDTH    = (screenWidth - 32 - 8) / 3;   // card margins + inner pad
@@ -294,9 +295,9 @@ export default function FarmerDetailScreen() {
   const docs    = farmer.FarmerDoc;
 
   const tabs = [
-    { key: 'basics'    as const, label: 'Basics'    },
-    { key: 'documents' as const, label: 'Documents' },
-    { key: 'plot'      as const, label: 'Plot'      },
+    { key: 'basics'    as const, label: 'Details',    icon: 'account-circle-outline' as const },
+    { key: 'documents' as const, label: 'Documents', icon: 'file-document-outline' as const },
+    { key: 'plot'      as const, label: 'Plot',      icon: 'map-outline' as const },
   ];
 
   return (
@@ -360,23 +361,8 @@ export default function FarmerDetailScreen() {
           </View>
         </View>
 
-        {/* ── Tab bar ───────────────────────────────────────────────────── */}
+        {/* ── Tab content card ─────────────────────────────────────────── */}
         <View style={S.tabCard}>
-          <View style={[S.tabBar, { backgroundColor: T.bg }]}>
-            <Animated.View style={[S.tabIndicator, { width: TAB_WIDTH - 6, transform: [{ translateX: tabAnim }] }]} />
-            {tabs.map(({ key, label }, index) => (
-              <TouchableOpacity
-                key={key}
-                style={[S.tabItem, { width: TAB_WIDTH }]}
-                onPress={() => handleTabPress(key, index)}
-                activeOpacity={0.7}
-              >
-                <Text style={[S.tabLabel, activeTab === key && S.tabLabelActive]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
 
           {/* ── BASICS ──────────────────────────────────────────────────── */}
           {activeTab === 'basics' && (
@@ -470,8 +456,12 @@ export default function FarmerDetailScreen() {
           {activeTab === 'plot' && (
             <View style={S.tabContent}>
 
-              {/* Maize crop banner */}
-              <View style={S.maizeBanner}>
+              {/* Maize crop banner — tap to expand/collapse plots */}
+              <TouchableOpacity
+                style={S.maizeBanner}
+                onPress={() => setPlotsExpanded(prev => !prev)}
+                activeOpacity={0.9}
+              >
                 <Image
                   source={require('@/assets/images/maize-pic.jpg')}
                   style={S.maizeBannerImg}
@@ -482,12 +472,21 @@ export default function FarmerDetailScreen() {
                     <Text style={S.maizeBannerCrop}>🌽 Maize</Text>
                     <Text style={S.maizeBannerSeason}>Kharif Season</Text>
                   </View>
-                  <View style={S.maizeBannerBadge}>
-                    <Text style={S.maizeBannerBadgeText}>Current Crop</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={S.maizeBannerBadge}>
+                      <Text style={S.maizeBannerBadgeText}>Current Crop</Text>
+                    </View>
+                    <MaterialCommunityIcons
+                      name={plotsExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={22}
+                      color="#fff"
+                    />
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
 
+              {plotsExpanded && (
+                <>
               {/* Add plot button */}
               <TouchableOpacity
                 style={S.addPlotBtn}
@@ -588,10 +587,35 @@ export default function FarmerDetailScreen() {
                   })}
                 </View>
               )}
+                </>
+              )}
             </View>
           )}
         </View>
       </ScrollView>
+
+      {/* ── Bottom tab bar ─────────────────────────────────────────────── */}
+      <View style={[S.tabBar, { backgroundColor: T.surface }]}>
+        <Animated.View style={[S.tabIndicator, { width: TAB_WIDTH - 6, transform: [{ translateX: tabAnim }] }]} />
+        {tabs.map(({ key, label, icon }, index) => (
+          <TouchableOpacity
+            key={key}
+            style={[S.tabItem, { width: TAB_WIDTH }]}
+            onPress={() => handleTabPress(key, index)}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons
+              name={icon}
+              size={18}
+              color={activeTab === key ? T.primary : T.textMuted}
+              style={{ marginBottom: 2 }}
+            />
+            <Text style={[S.tabLabel, activeTab === key && S.tabLabelActive]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <PlotFormModal
         visible={plotFormVisible}
@@ -721,8 +745,9 @@ const S = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     padding: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: T.border,
+    paddingBottom: 20,
+    borderTopWidth: 1,
+    borderTopColor: T.border,
     position: 'relative',
   },
   tabIndicator: {

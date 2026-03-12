@@ -1162,3 +1162,4 @@ const styles = StyleSheet.create({
   },
   viewPlotButtonText: { color: T.primary, fontSize: 13, fontWeight: '600' },
 });
+

@@ -125,9 +125,10 @@ function PlotSpecsCard({ plot }: { plot: FarmerPlotRecord | null }) {
     );
   }
 
-  const bigha = plot.land_size_value != null
+  const bighaRaw = plot.land_size_value != null
     ? landSizeToBigha(plot.land_size_value, plot.units)
     : null;
+  const bigha = typeof bighaRaw === 'number' && isFinite(bighaRaw) ? bighaRaw : null;
 
   return (
     <View style={styles.specsCard}>
@@ -212,6 +213,7 @@ export default function FarmerPlotScreen() {
 
   const daysSinceSowing    = advisoriesData?.days_since_sowing ?? null;
   const mappedAdvisories   = (advisoriesData?.advisories ?? []).map((a) => mapToAdvisory(a, daysSinceSowing));
+  const weatherSummary     = advisoriesData?.weather ?? null;
 
   // ── Fit map to a specific farm's coordinates ────────────────────────────────
   const fitToFarm = useCallback((index: number, maps: PlotMapRecord[]) => {
@@ -350,10 +352,7 @@ export default function FarmerPlotScreen() {
         {/* ── PLOTS TAB ──────────────────────────────────────────────────────── */}
         {activeTab === 'plots' && (
           <View>
-            {/* Plot specs */}
-            <PlotSpecsCard plot={plotDetails} />
-
-            {/* Map section */}
+            {/* Map section (moved up) */}
             {savedMapsLoading ? (
               <View style={styles.mapContainer}>
                 <ActivityIndicator size="large" color={T.primary} style={{ flex: 1 }} />
@@ -438,12 +437,6 @@ export default function FarmerPlotScreen() {
                                 <MaterialCommunityIcons name="vector-polygon" size={11} color={T.primary} />
                                 <Text style={styles.farmMetaChipText}>{m2ToBigha(m.area_m2).toFixed(2)} Bigha</Text>
                               </View>
-                              {m.area_acres > 0 && (
-                                <View style={styles.farmMetaChip}>
-                                  <MaterialCommunityIcons name="ruler-square" size={11} color={T.textMuted} />
-                                  <Text style={[styles.farmMetaChipText, { color: T.textMuted }]}>{m.area_acres.toFixed(2)} ac</Text>
-                                </View>
-                              )}
                             </View>
                           </View>
                           {idx === selectedFarm && (
@@ -462,20 +455,13 @@ export default function FarmerPlotScreen() {
                 ) : (
                   /* Single farm card */
                   <View style={styles.singleFarmCard}>
-                    <View style={styles.farmCardAccentActive} />
                     <View style={styles.farmCardBody}>
                       <Text style={styles.farmCardName}>{savedMaps[0].name || 'Farm 1'}</Text>
                       <View style={styles.farmCardMetaRow}>
                         <View style={styles.farmMetaChip}>
-                          <MaterialCommunityIcons name="vector-polygon" size={12} color={T.primary} />
-                          <Text style={[styles.farmMetaChipText, { fontSize: 13, fontWeight: '700' }]}>
+                          <MaterialCommunityIcons name="vector-polygon" size={11} color={T.primary} />
+                          <Text style={styles.farmMetaChipText}>
                             {m2ToBigha(savedMaps[0].area_m2).toFixed(2)} Bigha
-                          </Text>
-                        </View>
-                        <View style={styles.farmMetaChip}>
-                          <MaterialCommunityIcons name="ruler-square" size={12} color={T.textMuted} />
-                          <Text style={[styles.farmMetaChipText, { color: T.textMuted }]}>
-                            {savedMaps[0].area_acres.toFixed(2)} acres · {(savedMaps[0].area_hectares ?? 0).toFixed(3)} ha
                           </Text>
                         </View>
                       </View>
@@ -484,6 +470,9 @@ export default function FarmerPlotScreen() {
                 )}
               </>
             )}
+
+            {/* Plot specs (now below map) */}
+            <PlotSpecsCard plot={plotDetails} />
           </View>
         )}
 
@@ -493,6 +482,7 @@ export default function FarmerPlotScreen() {
             advisoriesLoading={advisoriesLoading}
             advisories={mappedAdvisories}
             daysSinceSowing={daysSinceSowing}
+            weather={weatherSummary}
           />
         )}
 

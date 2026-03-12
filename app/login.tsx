@@ -1,155 +1,23 @@
 import { useState, useRef } from 'react';
-import {
-  View,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
-  Alert,
-  TouchableOpacity,
-  TextInput as RNTextInput,
-  ScrollView,
-} from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, Image, Alert, TouchableOpacity, TextInput as RNTextInput, ScrollView } from 'react-native';
 import { Text, useTheme, Button } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { Colors } from '@/constants/theme';
-import Svg, { Path, Circle, Line, Ellipse, Rect, Defs, LinearGradient, Stop } from 'react-native-svg';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
-// ─── Farmer doodle ────────────────────────────────────────────────────────────
+const DOODLE_HEIGHT = 180;
+
+// ─── Environment doodle ───────────────────────────────────────────────────────
 function FarmerDoodle() {
-  const stroke = Colors.primaryDark;
-  const green  = Colors.primary;
-  const lime   = Colors.secondary;
-  const limeL  = Colors.secondaryLight;
-  const muted  = '#9EC9A4';
-  const skin   = '#F9D0A0';
-  const border = '#D4956A';
-
   return (
-    <Svg viewBox="0 0 360 170" width="100%" height="100%">
-      <Defs>
-        <LinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor="#DFF0E4" />
-          <Stop offset="100%" stopColor={Colors.bg} />
-        </LinearGradient>
-      </Defs>
-      <Rect width="360" height="170" fill="url(#sky)" />
-
-      {/* Hills */}
-      <Path d="M0 120 Q55 85 115 108 Q175 130 240 100 Q295 72 360 95 L360 170 L0 170Z"
-        fill="#C8E6C9" fillOpacity={0.45} />
-      <Path d="M0 145 Q80 132 170 140 Q260 148 360 136 L360 170 L0 170Z"
-        fill="#E4F0E6" />
-      <Path d="M0 152 Q90 146 180 150 Q270 154 360 148"
-        stroke="#B0D4B4" strokeWidth={1.2} fill="none" strokeLinecap="round" />
-
-      {/* Sun */}
-      <Circle cx={38} cy={32} r={12} stroke={limeL} strokeWidth={1.8} fill="white" fillOpacity={0.7} />
-      {[0,45,90,135,180,225,270,315].map((a, i) => {
-        const rad = (a * Math.PI) / 180;
-        return <Line key={i}
-          x1={38 + 16 * Math.cos(rad)} y1={32 + 16 * Math.sin(rad)}
-          x2={38 + 21 * Math.cos(rad)} y2={32 + 21 * Math.sin(rad)}
-          stroke={limeL} strokeWidth={1.4} strokeLinecap="round" />;
-      })}
-
-      {/* Cloud */}
-      <Ellipse cx={290} cy={38} rx={18} ry={9} fill="white" fillOpacity={0.7} stroke="#C8E6C9" strokeWidth={1} />
-      <Ellipse cx={304} cy={34} rx={13} ry={8} fill="white" fillOpacity={0.8} stroke="#C8E6C9" strokeWidth={1} />
-      <Ellipse cx={277} cy={36} rx={11} ry={7} fill="white" fillOpacity={0.75} stroke="#C8E6C9" strokeWidth={1} />
-
-      {/* Birds */}
-      <Path d="M68 55 Q71 52 74 55" stroke={muted} strokeWidth={1.2} fill="none" strokeLinecap="round" />
-      <Path d="M78 50 Q81 47 84 50" stroke={muted} strokeWidth={1.2} fill="none" strokeLinecap="round" />
-
-      {/* Fence */}
-      {[0,1,2,3].map(i => (
-        <Line key={i} x1={52 + i * 18} y1={145} x2={52 + i * 18} y2={158}
-          stroke="#B0D4B4" strokeWidth={1.5} strokeLinecap="round" />
-      ))}
-      <Line x1={52} y1={149} x2={106} y2={149} stroke="#B0D4B4" strokeWidth={1.2} strokeLinecap="round" />
-      <Line x1={52} y1={154} x2={106} y2={154} stroke="#B0D4B4" strokeWidth={1.2} strokeLinecap="round" />
-
-      {/* Crops */}
-      {[0,1,2,3,4,5].map(i => (
-        <Path key={i}
-          d={`M${210+i*20} 155 L${210+i*20} 134 M${210+i*20} 144 Q${203+i*20} 138 ${205+i*20} 133 M${210+i*20} 141 Q${217+i*20} 136 ${215+i*20} 131`}
-          stroke={i % 2 === 0 ? Colors.primaryLight : lime}
-          strokeWidth={1.3} fill="none" strokeLinecap="round" />
-      ))}
-
-      {/* Basket */}
-      <Path d="M92 158 Q93 152 100 152 Q107 152 108 158Z" stroke="#A67C25" strokeWidth={1.2} fill="#D4A84330" />
-      <Line x1={91} y1={158} x2={109} y2={158} stroke="#A67C25" strokeWidth={1.4} strokeLinecap="round" />
-
-      {/* ── Main farmer (more detail) ── */}
-      {/* Legs */}
-      <Line x1={112} y1={164} x2={119} y2={164} stroke={stroke} strokeWidth={2.2} strokeLinecap="round" />
-      <Line x1={127} y1={164} x2={134} y2={164} stroke={stroke} strokeWidth={2.2} strokeLinecap="round" />
-      <Line x1={120} y1={153} x2={116} y2={164} stroke={stroke} strokeWidth={2} strokeLinecap="round" />
-      <Line x1={126} y1={153} x2={130} y2={164} stroke={stroke} strokeWidth={2} strokeLinecap="round" />
-      {/* Torso / shirt */}
-      <Path d="M116 130 L116 153 Q118 154 123 154 Q128 154 130 153 L130 130"
-        stroke={green} strokeWidth={2} fill={Colors.primaryLight} fillOpacity={0.22}
-        strokeLinecap="round" strokeLinejoin="round" />
-      <Line x1={123} y1={138} x2={123} y2={148} stroke={green} strokeWidth={1.2} strokeLinecap="round" />
-      <Line x1={118} y1={142} x2={128} y2={142} stroke={green} strokeWidth={0.8} strokeLinecap="round" opacity={0.8} />
-      {/* Left arm + hand to basket */}
-      <Path d="M116 136 Q107 140 102 148" stroke={stroke} strokeWidth={1.8} strokeLinecap="round" />
-      <Line x1={102} y1={148} x2={96} y2={158} stroke={green} strokeWidth={1.6} strokeLinecap="round" />
-      <Circle cx={96} cy={158} r={2.5} fill={skin} stroke={border} strokeWidth={0.6} />
-      <Line x1={91} y1={157} x2={101} y2={157} stroke={green} strokeWidth={2.2} strokeLinecap="round" />
-      {/* Right arm + hand */}
-      <Path d="M130 136 Q137 133 140 128" stroke={stroke} strokeWidth={1.8} strokeLinecap="round" />
-      <Circle cx={141} cy={127} r={3} fill={skin} stroke={border} strokeWidth={0.8} />
-      <Path d="M139 126 L142 125 L143 127" stroke={border} strokeWidth={0.6} fill="none" strokeLinecap="round" />
-      {/* Neck */}
-      <Line x1={123} y1={120} x2={123} y2={128} stroke={skin} strokeWidth={2.5} />
-      <Line x1={121} y1={124} x2={125} y2={124} stroke={border} strokeWidth={0.5} opacity={0.6} />
-      {/* Face */}
-      <Circle cx={123} cy={114} r={10} fill={skin} stroke={border} strokeWidth={1.5} />
-      <Circle cx={120} cy={113} r={1} fill="#2A1810" />
-      <Circle cx={126} cy={113} r={1} fill="#2A1810" />
-      <Path d="M119 117 Q123 120 127 117" stroke="#2A1810" strokeWidth={1} fill="none" strokeLinecap="round" />
-      <Path d="M118 108 Q123 106 128 108" stroke="#2A1810" strokeWidth={0.8} fill="none" strokeLinecap="round" opacity={0.7} />
-      {/* Hat */}
-      <Path d="M112 109 Q113 108 123 108 Q133 108 134 109" stroke={stroke} strokeWidth={2.5} strokeLinecap="round" />
-      <Path d="M115 109 Q115 100 123 100 Q131 100 131 109"
-        stroke={stroke} strokeWidth={1.8} fill={green} fillOpacity={0.4} strokeLinejoin="round" />
-      <Line x1={115} y1={107} x2={131} y2={107} stroke={lime} strokeWidth={1.2} />
-      <Line x1={117} y1={103} x2={129} y2={103} stroke={stroke} strokeWidth={1} strokeLinecap="round" />
-
-      {/* ── Background farmer (more detail) ── */}
-      {/* Legs */}
-      <Line x1={162} y1={152} x2={158} y2={158} stroke="#607060" strokeWidth={1.6} strokeLinecap="round" />
-      <Line x1={168} y1={152} x2={171} y2={158} stroke="#607060" strokeWidth={1.6} strokeLinecap="round" />
-      <Line x1={160} y1={152} x2={160} y2={158} stroke="#5A6B5A" strokeWidth={1} strokeLinecap="round" opacity={0.6} />
-      <Line x1={170} y1={152} x2={170} y2={158} stroke="#5A6B5A" strokeWidth={1} strokeLinecap="round" opacity={0.6} />
-      {/* Torso */}
-      <Path d="M159 133 Q160 128 165 128 Q170 128 171 133 L171 152 L159 152 Z"
-        stroke={green} strokeWidth={1.5} fill={Colors.primaryLight} fillOpacity={0.28}
-        strokeLinejoin="round" />
-      <Line x1={160} y1={133} x2={170} y2={133} stroke={green} strokeWidth={1.8} strokeLinecap="round" />
-      <Line x1={165} y1={138} x2={165} y2={145} stroke={green} strokeWidth={0.9} strokeLinecap="round" opacity={0.8} />
-      {/* Arms */}
-      <Path d="M160 143 Q157 146 155 150" stroke="#607060" strokeWidth={1.5} strokeLinecap="round" />
-      <Path d="M170 143 Q173 146 172 149" stroke="#607060" strokeWidth={1.5} strokeLinecap="round" />
-      <Circle cx={155} cy={150} r={1.8} fill={skin} stroke={border} strokeWidth={0.5} />
-      <Circle cx={172} cy={149} r={1.8} fill={skin} stroke={border} strokeWidth={0.5} />
-      {/* Neck */}
-      <Line x1={165} y1={140} x2={165} y2={132} stroke={skin} strokeWidth={2} strokeLinecap="round" />
-      {/* Face */}
-      <Circle cx={165} cy={125} r={7} fill={skin} stroke={border} strokeWidth={1.2} />
-      <Circle cx={163} cy={124} r={0.9} fill="#2A1810" />
-      <Circle cx={167} cy={124} r={0.9} fill="#2A1810" />
-      <Path d="M162 127 Q165 129 168 127" stroke="#2A1810" strokeWidth={0.8} fill="none" strokeLinecap="round" />
-      {/* Hat */}
-      <Path d="M158 122 Q159 118 165 118 Q171 118 172 122"
-        stroke={stroke} strokeWidth={1.4} fill={green} fillOpacity={0.35} strokeLinejoin="round" />
-      <Line x1={158} y1={122} x2={172} y2={122} stroke={lime} strokeWidth={0.9} strokeLinecap="round" />
-    </Svg>
+    <Image
+      source={{
+        uri: 'https://568a6n8a8z.ucarecd.net/035ce705-94df-41de-bcfd-31d01b89142e/_4.jpeg',
+      }}
+      style={{ width: '100%', height: '100%' }}
+      resizeMode="cover"
+    />
   );
 }
 
@@ -173,6 +41,7 @@ export default function LoginScreen() {
   const [sendingOtp, setSendingOtp]           = useState(false);
   const requestInFlightRef                    = useRef(false);
   const otpRefs                               = useRef<(RNTextInput | null)[]>([]);
+  const scrollRef                             = useRef<ScrollView | null>(null);
 
   const { login, loginWithFarmerOtp, requestFarmerOtp, isLoading } = useAuth();
   const router = useRouter();
@@ -180,7 +49,6 @@ export default function LoginScreen() {
   const onSurface        = theme.colors.onSurface;
   const onSurfaceVariant = theme.colors.onSurfaceVariant;
 
-  // ── handlers ────────────────────────────────────────────────────────────────
   const handlePhoneChange = (val: string) => {
     setError('');
     setPhone(val.replace(/\D/g, '').slice(0, 10));
@@ -251,7 +119,6 @@ export default function LoginScreen() {
     if (screen === SCREENS.AGENT) { setScreen(SCREENS.PHONE); }
   };
 
-  // ── render ───────────────────────────────────────────────────────────────────
   return (
     <View style={styles.root}>
       <KeyboardAvoidingView
@@ -259,12 +126,19 @@ export default function LoginScreen() {
         style={styles.kav}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── Doodle (lateral, from top) ────────────────────────────────── */}
-          <View style={styles.doodleWrap}>
+          {/* ── Doodle banner: SVG fills behind, logo pill centred in front ── */}
+          <View style={[styles.doodleWrap, { height: DOODLE_HEIGHT }]}>
+            {/* SVG fills entire banner behind */}
+            <View style={styles.svgAbsolute}>
+              <FarmerDoodle />
+            </View>
+
+            {/* Logo pill is in normal flow, centred via alignItems */}
             <View style={styles.logoPill}>
               <Image
                 source={require('@/assets/images/digi-prishi-logo.webp')}
@@ -275,15 +149,11 @@ export default function LoginScreen() {
                 Digi Krishi
               </Text>
             </View>
-            <View style={styles.doodleBox}>
-              <FarmerDoodle />
-            </View>
           </View>
 
           {/* ── Card ─────────────────────────────────────────────────────── */}
           <View style={styles.card}>
 
-            {/* Back — OTP & Agent only */}
             {screen !== SCREENS.PHONE && (
               <TouchableOpacity onPress={goBack} style={styles.backBtn} activeOpacity={0.7}>
                 <Text variant="titleLarge" style={{ color: onSurfaceVariant }}>←</Text>
@@ -341,7 +211,6 @@ export default function LoginScreen() {
                   {sendingOtp ? 'Sending…' : 'Send OTP'}
                 </Button>
 
-                {/* Agent — small, quiet, at the bottom */}
                 <TouchableOpacity
                   onPress={() => { setEmail(''); setPassword(''); setError(''); setScreen(SCREENS.AGENT); }}
                   style={styles.agentLink}
@@ -375,6 +244,10 @@ export default function LoginScreen() {
                       value={d}
                       onChangeText={(val) => handleOtpChange(i, val)}
                       onKeyPress={(e) => handleOtpKey(i, e)}
+                      onFocus={() => {
+                        // Ensure OTP row is visible above the keyboard
+                        scrollRef.current?.scrollToEnd({ animated: true });
+                      }}
                       maxLength={1}
                       keyboardType="number-pad"
                       style={[
@@ -488,55 +361,52 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.bg,
+    backgroundColor: '#E6F4EA',
   },
   kav: {
     flex: 1,
   },
-  // justifyContent: 'center' keeps the whole block centred vertically,
-  // paddingTop nudges everything slightly above true centre
   scroll: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingTop: 0,
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
 
-  // ── Doodle (lateral, from top) ──
+  // ── Doodle banner ──
   doodleWrap: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
-    paddingTop: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    backgroundColor: Colors.bg,
-    minHeight: 140,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
+  svgAbsolute: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+
+  // ── Logo pill — centred horizontally over the doodle ──
   logoPill: {
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
+    gap: 2,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    borderRadius: 22,
     backgroundColor: Colors.surface,
     borderWidth: 2,
     borderColor: Colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  doodleBox: {
-    flex: 1,
-    height: 120,
-    marginLeft: 12,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.10,
+    shadowRadius: 10,
+    elevation: 5,
   },
   logoImg: {
-    width: 28,
-    height: 28,
+    width: 40,
+    height: 30,
     borderRadius: 8,
   },
   logoText: {
@@ -548,7 +418,8 @@ const styles = StyleSheet.create({
   // ── Card ──
   card: {
     marginHorizontal: 20,
-    marginTop: 16,
+    marginTop: 20,
+    marginBottom: 28,
     padding: 24,
     borderRadius: 24,
     backgroundColor: Colors.surface,
