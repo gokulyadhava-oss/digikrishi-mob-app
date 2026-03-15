@@ -336,8 +336,12 @@ export function AdvisoryTab({
     location_name?: string | null;
   } | null;
 }) {
-  const currentAdvisories = advisories.filter((a) => a.is_current_period);
-  const otherAdvisories   = advisories.filter((a) => !a.is_current_period);
+  // Only show advisories that have a date range (start_day and end_day)
+  const withDateRange = advisories.filter(
+    (a) => a.start_day != null && a.end_day != null
+  );
+  const currentAdvisories = withDateRange.filter((a) => a.is_current_period);
+  const otherAdvisories   = withDateRange.filter((a) => !a.is_current_period);
 
   if (advisoriesLoading) {
     return (
@@ -348,7 +352,7 @@ export function AdvisoryTab({
     );
   }
 
-  if (advisories.length === 0) {
+  if (withDateRange.length === 0) {
     return (
       <View style={styles.empty}>
         <Text style={styles.emptyEmoji}>📋</Text>
@@ -361,7 +365,7 @@ export function AdvisoryTab({
   return (
     <View>
       {/* Weather summary (if available) */}
-      {weather && (weather.temperature_c != null || weather.description) && (
+      {weather && (weather.temperature_c != null || weather.description) ? (
         <View style={{ marginBottom: 16 }}>
           <View
             style={{
@@ -404,6 +408,12 @@ export function AdvisoryTab({
               </Text>
             )}
           </View>
+        </View>
+      ) : (
+        <View style={{ marginBottom: 12, paddingHorizontal: 4 }}>
+          <Text style={{ fontSize: 12, color: T.textMuted }}>
+            Weather for this plot is unavailable. It appears when the plot has a mapped boundary and the server has weather configured.
+          </Text>
         </View>
       )}
 

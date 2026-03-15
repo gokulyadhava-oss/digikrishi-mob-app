@@ -10,13 +10,7 @@ From project root you can run:
 npm run android:release
 ```
 
-or from the `android` folder:
-
-```bash
-NODE_ENV=production ./gradlew assembleRelease
-```
-
-This sets `NODE_ENV` so the Expo config step doesn’t warn. The Maps API key is read from the project root `.env` at Gradle config time so the release APK has the key.
+Use `npm run android:release` so the Expo config step doesn’t warn. Use `npm run android:release` from the project root so `.env` is loaded (backend URL and Maps key). Running `./gradlew assembleRelease` from the `android` folder does not load `.env` for the JS bundle, so the app would use localhost and requests fail on device.
 
 If the map is still white, use the SHA-1 fix below (your release build may be signed with the debug keystore; if so, that SHA-1 must be in Google Cloud).
 

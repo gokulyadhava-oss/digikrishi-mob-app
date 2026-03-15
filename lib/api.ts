@@ -41,7 +41,7 @@ export async function api<T>(
         : err.message || 'Network error';
     const hint =
       url.includes('localhost') || url.includes('127.0.0.1') || url.match(/192\.168\.\d+\.\d+/)
-        ? ' On a physical iPhone: set EXPO_PUBLIC_API_URL in .env to your computer\'s IP (e.g. http://192.168.1.5:8080). iPhone and computer must be on the same Wi‑Fi.'
+        ? ' On a physical device: set EXPO_PUBLIC_API_URL in .env to your computer\'s IP (e.g. http://192.168.1.5:8080). Device and computer must be on the same Wi‑Fi.'
         : '';
     throw new Error(`${msg}${hint}`);
   }

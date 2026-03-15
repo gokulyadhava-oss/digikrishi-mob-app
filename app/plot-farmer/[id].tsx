@@ -83,8 +83,20 @@ function regionFromCoordinates(
 
 // ─── Advisory mapper ──────────────────────────────────────────────────────────
 function mapToAdvisory(raw: CropAdvisoryRecord, daysSinceSowing: number | null): Advisory {
-  const spec     = raw.specifications as { text?: string } | null | undefined;
-  const stepsObj = raw.steps          as { text?: string } | null | undefined;
+  const specRaw = raw.specifications as { text?: string } | string[] | null | undefined;
+  const stepsRaw = raw.steps as { text?: string } | Array<{ text?: string; step?: number }> | null | undefined;
+  const specifications =
+    Array.isArray(specRaw) && specRaw.length > 0
+      ? { text: specRaw.filter((s): s is string => typeof s === "string").join("\n") }
+      : specRaw?.text != null
+        ? { text: String(specRaw.text) }
+        : null;
+  const steps =
+    Array.isArray(stepsRaw) && stepsRaw.length > 0
+      ? { text: stepsRaw.map((s) => (s && typeof s === "object" && "text" in s ? String(s.text) : String(s))).join("\n") }
+      : stepsRaw?.text != null
+        ? { text: String(stepsRaw.text) }
+        : null;
   const is_current_period =
     daysSinceSowing != null && raw.start_day != null && raw.end_day != null &&
     daysSinceSowing >= raw.start_day && daysSinceSowing <= raw.end_day;
@@ -95,8 +107,8 @@ function mapToAdvisory(raw: CropAdvisoryRecord, daysSinceSowing: number | null):
     activity_time:    raw.activity_time ?? null,
     start_day:        raw.start_day ?? null,
     end_day:          raw.end_day ?? null,
-    specifications:   spec?.text     != null ? { text: String(spec.text)     } : null,
-    steps:            stepsObj?.text != null ? { text: String(stepsObj.text) } : null,
+    specifications,
+    steps,
     step_index:       (raw as { step_index?: number }).step_index ?? 0,
     is_current_period: (raw as { is_current_period?: boolean }).is_current_period ?? is_current_period,
   };
